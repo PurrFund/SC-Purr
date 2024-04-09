@@ -1,0 +1,26 @@
+{
+  "name": "SC-Purr",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:PurrFund/SC-Purr.git",
+  "author": "scPurr <sc@purr.fund>",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1"
+  },
+  "devDependencies": {
+    "ds-test": "https://github.com/dapphub/ds-test",
+    "forge-std": "https://github.com/foundry-rs/forge-std",
+    "prettier": "^3.2.5",
+    "solhint": "^4.5.2"
+  },
+  "scripts": {
+    "test": "forge test",
+    "clean": "rm -rf cache out",
+    "build": "forge build",
+    "lint": "yarn run lint:sol && yarn run prettier:check",
+    "lint:sol": "forge fmt --check && yarn solhint {script,src,test}/**/*.sol",
+    "prettier:check": "prettier --check **/*.{json,md,yml} --ignore-path=.prettierignore",
+    "prettier:write": "prettier --write **/*.{json,md,yml} --ignore-path=.prettierignore"
+}
+}

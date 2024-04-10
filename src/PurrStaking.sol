@@ -6,7 +6,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { Power, PowerSystem, UserPower, PoolInfo, PoolType } from "./types/PurrStaingType.sol";
+import { UserPower, PoolInfo, PoolType } from "./types/PurrStaingType.sol";
 import { IPurrStaking } from "./interfaces/IPurrStaking.sol";
 
 /**

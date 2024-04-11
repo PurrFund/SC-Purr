@@ -9,12 +9,15 @@ import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.s
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
 
+/**
+ * @title PurrDeposit.
+ * @notice Track investment amount.
+ */
 contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
     address private _rootAdmin;
-    mapping(address depositor => uint256 amount) depositorInfos;
     IERC20 public usdc;
 
     constructor(address _initialOwner, address _usdc, address rootAdmin_) Ownable(_initialOwner) {
@@ -22,31 +25,41 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
         _rootAdmin = rootAdmin_;
     }
 
-    function deposit(uint256 amount) external nonReentrant {
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function deposit(uint256 _amount) external nonReentrant {
         address sender = msg.sender;
-        if (amount <= 0) {
-            revert InvalidAmount(amount);
+        if (_amount <= 0) {
+            revert InvalidAmount(_amount);
         }
 
-        if (usdc.allowance(sender, address(this)) < amount) {
+        if (usdc.allowance(sender, address(this)) < _amount) {
             revert InsufficientAllowance();
         }
 
-        depositorInfos[sender] += amount;
+        usdc.safeTransferFrom(sender, _rootAdmin, _amount);
 
-        usdc.safeTransferFrom(sender, _rootAdmin, amount);
-
-        emit Deposit(sender, address(this), amount, block.timestamp);
+        emit Deposit(sender, address(this), _amount, block.timestamp);
     }
 
+    /**
+     * @inheritdoc IPurrDeposit
+     */
     function setUsdc(address _usdc) external onlyOwner nonReentrant {
         usdc = IERC20(_usdc);
     }
 
+    /**
+     * @inheritdoc IPurrDeposit
+     */
     function setRootAdmin(address rootAdmin_) external onlyOwner nonReentrant {
         _rootAdmin = rootAdmin_;
     }
 
+    /**
+     * @inheritdoc IPurrDeposit
+     */
     function getRootAdmin() external view onlyOwner returns (address) {
         return _rootAdmin;
     }

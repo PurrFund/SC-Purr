@@ -8,5 +8,4 @@ interface IPurrDeposit {
     // error list
     error InvalidAmount(uint256 amount);
     error InsufficientAllowance();
-    
 }

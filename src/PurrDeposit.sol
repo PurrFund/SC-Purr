@@ -6,23 +6,23 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
 
-contract PurrDeposit is Ownable, ReentrancyGuard, Pausable, IPurrDeposit {
+contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
+    address private _rootAdmin;
     mapping(address depositor => uint256 amount) depositorInfos;
-
     IERC20 public usdc;
 
-    constructor(address _initialOwner, address _usdc) Ownable(_initialOwner) {
+    constructor(address _initialOwner, address _usdc, address rootAdmin_) Ownable(_initialOwner) {
         usdc = IERC20(_usdc);
+        _rootAdmin = rootAdmin_;
     }
 
-    function deposit(uint256 amount) external whenNotPaused nonReentrant {
+    function deposit(uint256 amount) external nonReentrant {
         address sender = msg.sender;
         if (amount <= 0) {
             revert InvalidAmount(amount);
@@ -34,22 +34,20 @@ contract PurrDeposit is Ownable, ReentrancyGuard, Pausable, IPurrDeposit {
 
         depositorInfos[sender] += amount;
 
-        usdc.safeTransferFrom(sender, address(this), amount);
+        usdc.safeTransferFrom(sender, _rootAdmin, amount);
 
         emit Deposit(sender, address(this), amount, block.timestamp);
     }
 
-    function withDraw(uint256 amount) external whenNotPaused nonReentrant { }
-
-    function setUsdc(address _usdc) external onlyOwner {
+    function setUsdc(address _usdc) external onlyOwner nonReentrant {
         usdc = IERC20(_usdc);
     }
 
-    function pause() external onlyOwner {
-        _pause();
+    function setRootAdmin(address rootAdmin_) external onlyOwner nonReentrant {
+        _rootAdmin = rootAdmin_;
     }
 
-    function unpause() external onlyOwner {
-        _unpause();
+    function getRootAdmin() external view onlyOwner returns (address) {
+        return _rootAdmin;
     }
 }

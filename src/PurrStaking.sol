@@ -6,36 +6,26 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-import { Power, PowerSystem } from "./types/PurrStaingType.sol";
+import { UserPower, PoolInfo, PoolType } from "./types/PurrStaingType.sol";
+import { IPurrStaking } from "./interfaces/IPurrStaking.sol";
 
 /**
  * @title PurrStaking
  * @notice Tier system and staking model
  */
-contract PurrStaking is Ownable {
+contract PurrStaking is IPurrStaking, Ownable {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
-    struct UserPower {
-        Power power;
-        uint256 balance;
-    }
-
-    IERC20 public launchPadToken;
+    uint16 public poolId;
     uint256 public timeLock;
+    IERC20 public launchPadToken;
 
     mapping(address staker => UserPower userPower) public userPower;
-    mapping(Power power => PowerSystem powerSystem) public pownerSystem;
+    mapping(PoolType poolType => PoolInfo pool) public poolInfo;
 
-    constructor(address _launchPadToken, address _initialOnwer, uint256 _timeLock) Ownable(_initialOnwer) {
+    constructor(address _launchPadToken, address _initialOnwer) Ownable(_initialOnwer) {
         launchPadToken = IERC20(_launchPadToken);
-        pownerSystem[Power.ONE] = PowerSystem(1, 100);
-        pownerSystem[Power.TWO] = PowerSystem(2, 300);
-        pownerSystem[Power.THREE] = PowerSystem(3, 600);
-        pownerSystem[Power.FOUR] = PowerSystem(4, 1000);
-        pownerSystem[Power.FIVE] = PowerSystem(5, 1500);
-        pownerSystem[Power.SIX] = PowerSystem(6, 2100);
-        timeLock = _timeLock;
     }
 
     /**
@@ -47,13 +37,10 @@ contract PurrStaking is Ownable {
      * Requirements:
      *   - Require sender approve amount token's staking for this contract more than {amount}.
      *
-     * @param amount The amount user will stake.
-     *
-     * @return status The result of staking.
+     * @param _amount The amount user will stake.
      */
-    function stake(uint256 amount) external returns (bool status) {
-        status = _stake(amount);
-        return status;
+    function stake(uint256 _amount, PoolType _poolType) external {
+        _stake(_amount, _poolType);
     }
 
     /**
@@ -66,12 +53,12 @@ contract PurrStaking is Ownable {
      * Requirements:
      *   - Amount must be smaller than current balance stake.
      *
-     * @param amount The amount user will stake.
+     * @param _amount The amount user will stake.
      *
      * @return status The result of staking.
      */
-    function unstake(uint256 amount) external returns (bool) {
-        bool status = _unStake(amount);
+    function unstake(uint256 _amount, PoolType _poolType) external returns (bool) {
+        bool status = _unStake(_amount, _poolType);
         return status;
     }
 
@@ -79,43 +66,46 @@ contract PurrStaking is Ownable {
     //     _withDraw();
     // }
 
-    /**
-     * @dev Update power correspond to each value from {Power} enum, and Power.ZERO alway 0
-     * Params:
-     * - powerList: list amount power, powerList[0] -> Power.ONE and so on sequentially
-     * Return (bool) value
-     */
-    function updatePowerSystem(PowerSystem[] calldata powerList) external onlyOwner returns (bool) {
-        pownerSystem[Power.ONE] = powerList[0];
-        pownerSystem[Power.TWO] = powerList[1];
-        pownerSystem[Power.THREE] = powerList[2];
-        pownerSystem[Power.FOUR] = powerList[3];
-        pownerSystem[Power.FIVE] = powerList[4];
-        pownerSystem[Power.SIX] = powerList[5];
-
-        return true;
+    function updatePool(PoolType _poolType, PoolInfo calldata pool) external onlyOwner {
+        poolInfo[_poolType] = pool;
     }
 
     /**
      * @dev Equivalent to {stake} function.
      */
-    function _stake(uint256 amount) internal returns (bool) {
-        if (launchPadToken.balanceOf(msg.sender) < amount) {
-            revert InsufficientAmount(amount);
+    function _stake(uint256 _amount, PoolType _poolType) internal returns (bool) {
+        address sender = msg.sender;
+        PoolInfo storage pool = poolInfo[_poolType];
+        UserPower storage user = userPower[sender];
+        uint256 currentPoint = _amount * pool.multiplier;
+
+        if (launchPadToken.balanceOf(sender) < _amount) {
+            revert InsufficientAmount(_amount);
         }
 
-        // if (amount < launchPadToken.allowance(msg.sender, address(this))) {
-        //     revert InsufficientAlowances(amount);
-        // }
+        if (currentPoint < pool.minPoint) {
+            revert InvalidPoint(currentPoint);
+        }
 
-        userPower[msg.sender].balance.tryAdd(amount);
+        if (_amount < 0) {
+            revert InvalidAmount(_amount);
+        }
 
-        IERC20(launchPadToken).safeTransferFrom(msg.sender, address(this), amount);
+        // update pool weight
+        pool.totalStaked += _amount;
+        ++pool.numberStaker;
 
-        Power power = _getPower();
-        userPower[msg.sender].power = power;
+        // update user powerun
+        user.balance += _amount;
+        user.pPoint += currentPoint;
 
-        emit Stake(msg.sender, amount, block.timestamp, power);
+        (PoolType tier, uint256 userWeight) = _getPower(user.pPoint);
+        user.tier = tier;
+        user.weight = userWeight;
+
+        IERC20(launchPadToken).safeTransferFrom(sender, address(this), _amount);
+
+        emit Stake(sender, _amount, block.timestamp, currentPoint, userWeight, tier);
 
         return true;
     }
@@ -123,21 +113,42 @@ contract PurrStaking is Ownable {
     /**
      * @dev Equivalent to {unStake} function.
      */
-    function _unStake(uint256 amount) internal returns (bool) {
-        uint256 currentBalance = userPower[msg.sender].balance;
+    function _unStake(uint256 _amount, PoolType _poolType) internal returns (bool) {
+        address sender = msg.sender;
+        PoolInfo storage pool = poolInfo[_poolType];
+        UserPower storage user = userPower[sender];
+        uint256 currentBalance = user.balance;
+        uint256 currentPoint = _amount * pool.multiplier;
+        uint256 timeStake = block.timestamp - user.timeLocked;
 
-        if (amount > currentBalance) {
-            revert ExceedBalance(amount);
+        if (_amount > currentBalance) {
+            revert ExceedBalance(_amount);
         }
 
-        userPower[msg.sender].balance.trySub(amount);
+        if (_amount == 0) {
+            revert InvalidAmount(_amount);
+        }
 
-        IERC20(launchPadToken).safeTransferFrom(msg.sender, address(this), amount);
+        if (timeStake < pool.lockPeriodInDays) {
+            // later handle
+        }
 
-        Power power = _getPower();
-        userPower[msg.sender].power = power;
+        pool.totalStaked -= _amount;
+        if (_amount == currentBalance) {
+            --pool.numberStaker;
+        }
 
-        emit UnStake(msg.sender, amount, block.timestamp, power);
+        currentBalance -= _amount;
+        user.pPoint -= currentPoint;
+        user.balance = currentBalance;
+
+        (PoolType tier, uint256 userWeight) = _getPower(currentBalance);
+        user.tier = tier;
+        user.weight = userWeight;
+
+        IERC20(launchPadToken).safeTransferFrom(msg.sender, address(this), _amount);
+
+        emit UnStake(sender, _amount, block.timestamp, user.pPoint, userWeight, tier);
 
         return true;
     }
@@ -145,38 +156,26 @@ contract PurrStaking is Ownable {
     /**
      * @dev Get user's power base on user's balance
      */
-    function _getPower() internal view returns (Power) {
-        uint256 balanceStake = userPower[msg.sender].balance;
-
-        if (balanceStake < pownerSystem[Power.ONE].amount) {
-            return Power.ZERO;
-        } else if (balanceStake < pownerSystem[Power.TWO].amount) {
-            return Power.ONE;
-        } else if (balanceStake < pownerSystem[Power.THREE].amount) {
-            return Power.TWO;
-        } else if (balanceStake < pownerSystem[Power.FOUR].amount) {
-            return Power.THREE;
-        } else if (balanceStake < pownerSystem[Power.FIVE].amount) {
-            return Power.FOUR;
-        } else if (balanceStake < pownerSystem[Power.SIX].amount) {
-            return Power.FIVE;
-        } else if (balanceStake >= pownerSystem[Power.SIX].amount) {
-            return Power.SIX;
+    function _getPower(uint256 _point) internal view returns (PoolType tier, uint256 weight) {
+        if (_point < poolInfo[PoolType.BZONZE].minPoint) {
+            return (PoolType.ZERO, _point);
+        } else if (_point < poolInfo[PoolType.SLIVER].minPoint) {
+            return (PoolType.BZONZE, _getWeight(_point, poolInfo[PoolType.BZONZE].minPoint, poolInfo[PoolType.BZONZE].minWeight));
+        } else if (_point < poolInfo[PoolType.GOLD].minPoint) {
+            return (PoolType.SLIVER, _getWeight(_point, poolInfo[PoolType.SLIVER].minPoint, poolInfo[PoolType.SLIVER].minWeight));
+        } else if (_point < poolInfo[PoolType.DIAMOND].minPoint) {
+            return (PoolType.GOLD, _getWeight(_point, poolInfo[PoolType.GOLD].minPoint, poolInfo[PoolType.GOLD].minWeight));
+        } else if (_point >= poolInfo[PoolType.DIAMOND].minPoint) {
+            return
+                (PoolType.DIAMOND, _getWeight(_point, poolInfo[PoolType.DIAMOND].minPoint, poolInfo[PoolType.DIAMOND].minWeight));
         }
+    }
 
-        return Power.ZERO;
+    function _getWeight(uint256 _point, uint256 _mintPoint, uint256 _minWeight) internal pure returns (uint256) {
+        return _point.mulDiv(_mintPoint, _minWeight, Math.Rounding.Floor);
     }
 
     function _beforeWithDraw() internal { }
 
     function _afterStaking() internal { }
-
-    // event list
-    event Stake(address indexed staker, uint256 amount, uint256 time, Power power);
-    event UnStake(address indexed staker, uint256 amount, uint256 time, Power power);
-
-    // error list
-    error InsufficientAmount(uint256 amount);
-    error InsufficientAlowances(uint256 amount);
-    error ExceedBalance(uint256 amount);
 }

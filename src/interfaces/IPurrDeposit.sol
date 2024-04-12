@@ -33,10 +33,4 @@ interface IPurrDeposit {
      * @param rootAdmin_ The rootAdmin address.
      */
     function setRootAdmin(address rootAdmin_) external;
-
-    /**
-     * @notice Get rootAdmin.
-     * @return The rootAdmin address.
-     */
-    function getRootAdmin() external returns (address);
 }

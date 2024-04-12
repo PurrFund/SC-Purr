@@ -17,12 +17,12 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
-    address private _rootAdmin;
+    address public rootAdmin;
     IERC20 public usdc;
 
-    constructor(address _initialOwner, address _usdc, address rootAdmin_) Ownable(_initialOwner) {
+    constructor(address _initialOwner, address _usdc, address _rootAdmin) Ownable(_initialOwner) {
         usdc = IERC20(_usdc);
-        _rootAdmin = rootAdmin_;
+        rootAdmin = _rootAdmin;
     }
 
     /**
@@ -38,7 +38,7 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
             revert InsufficientAllowance();
         }
 
-        usdc.safeTransferFrom(sender, _rootAdmin, _amount);
+        usdc.safeTransferFrom(sender, rootAdmin, _amount);
 
         emit Deposit(sender, address(this), _amount, block.timestamp);
     }
@@ -53,14 +53,7 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function setRootAdmin(address rootAdmin_) external onlyOwner nonReentrant {
-        _rootAdmin = rootAdmin_;
-    }
-
-    /**
-     * @inheritdoc IPurrDeposit
-     */
-    function getRootAdmin() external view onlyOwner returns (address) {
-        return _rootAdmin;
+    function setRootAdmin(address _rootAdmin) external onlyOwner nonReentrant {
+        rootAdmin = _rootAdmin;
     }
 }

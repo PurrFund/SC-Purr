@@ -39,7 +39,7 @@ contract PurrStakingTest is BaseTest {
       uint256 _totalStaked,
       uint256 _numberStaker,
       PoolType _poolType
-    ) internal returns (PoolInfo memory){
+    ) internal pure returns (PoolInfo memory){
       return PoolInfo({
         apr: _apr,
         unstakeFee: _unstakeFee,
@@ -97,19 +97,14 @@ contract PurrStakingTest is BaseTest {
   }
 
   
-  // function test_ShouldRevert_ERC20InsufficientAllowance_Stake() public {
-  //   bytes4 selector = bytes4(keccak256("ERC20InsufficientAllowance(address, uint256, uint256)"));
-  //   vm.expectRevert(abi.encodeWithSelector(selector, address(purrStaking), launchPadToken.allowance(users.alice, address(purrStaking)), 20));
-  //   dealTokens(launchPadToken, users.alice);
-  //   vm.startPrank(users.alice);
-  //   //launchPadToken.approve(address(purrStaking), 0);
-  //   purrStaking.stake(20, PoolType.THREE);
-  //   vm.stopPrank();
-  // }
+  function test_ShouldRevert_ERC20InsufficientAllowance_Stake() public {
+    dealTokens(launchPadToken, users.alice);
 
-  function test_Expect() public{
-    assertEq(address(purrStaking), 0x2e234DAe75C793f67A35089C9d99245E1C58470b);
-    assertEq(address(launchPadToken), address(purrStaking.launchPadToken()));
+    bytes4 selector = bytes4(keccak256("ERC20InsufficientAllowance(address,uint256,uint256)"));
+    vm.expectRevert(abi.encodeWithSelector(selector, address(purrStaking), launchPadToken.allowance(users.alice, address(purrStaking)), 20));
+
+    vm.prank(users.alice);
+    purrStaking.stake(20, PoolType.THREE);
   }
 
   function test_Expect_PoolInfo_Stake() public {
@@ -123,7 +118,7 @@ contract PurrStakingTest is BaseTest {
     purrStaking.stake(30, PoolType.THREE);
     vm.stopPrank();
 
-    (uint16 _apr, uint8 _unstakeFee, uint16 _multiplier, uint32 _lockDay, uint32 _unstakeTime, uint256 _totalStaked, uint256 _numberStaker, PoolType _poolType) = purrStaking.poolInfo(PoolType.THREE);
+    (, , , , , uint256 _totalStaked, uint256 _numberStaker, ) = purrStaking.poolInfo(PoolType.THREE);
 
     assertEq(_totalStaked, 1030);
     assertEq(_numberStaker, 3);
@@ -167,12 +162,24 @@ contract PurrStakingTest is BaseTest {
 
   function test_Expect_Ballance_Stake() public {
     dealTokens(launchPadToken, users.alice);
+
+    uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
+    uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+
     vm.startPrank(users.alice);
     launchPadToken.approve(address(purrStaking), 30);
     purrStaking.stake(30, PoolType.THREE);
     vm.stopPrank();
-    
-    assertEq(launchPadToken.balanceOf(address(purrStaking)), 30);
+
+    uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
+    uint256 amountStake = oldBalanceUser - newBalanceUser;
+
+    uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+    uint256 _amountStake = newBalancePurrStaking - oldBalancePurrStaking;
+
+    assertEq(amountStake, _amountStake);
+    assertEq(amountStake, 30);
+    assertEq(_amountStake, 30);
   }
 
   // function test_Expect_EmitEvent_Stake() public {
@@ -210,35 +217,135 @@ contract PurrStakingTest is BaseTest {
     purrStaking.claimReward(1);
   }
 
-  // function test_Expect_CalculatePendingReward() public {
-  //   PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
-  //   vm.prank(users.admin);
-  //   purrStaking.updatePool(pool);
+  function test_Expect_CalculatePendingReward() public {
+    PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
 
-  //   dealTokens(launchPadToken, users.alice);
-  //   vm.startPrank(users.alice);
-  //   launchPadToken.approve(address(purrStaking), 30);
-  //   purrStaking.stake(30, PoolType.ONE);
-  //   vm.stopPrank();
+    dealTokens(launchPadToken, users.alice);
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
+    purrStaking.stake(30, PoolType.ONE);
+    vm.stopPrank();
 
-  //   assertEq(purrStaking.itemId(), 1);
+    assertEq(purrStaking.itemId(), 1);
 
-  //   (address _staker, uint256 _pPoint, uint256 _stakedAmount, uint256 _start, uint256 _end, PoolType _pool_Type) = purrStaking.userPoolInfo(1);
+    ( , , uint256 _stakedAmount, uint256 _start, , PoolType _pool_Type) = purrStaking.userPoolInfo(1);
 
-  //   (uint16 _apr, uint8 _unstakeFee, uint16 _multiplier, uint32 _lockDay, uint32 _unstakeTime, uint256 _totalStaked, uint256 _numberStaker, PoolType _poolType_) = purrStaking.poolInfo(_pool_Type);
+    (uint16 _apr, , , , , , , ) = purrStaking.poolInfo(_pool_Type);
 
-  //   vm.warp(2 days);
-  //   uint256 timeStaked = block.timestamp - _start;
-  //   uint256 timeStakedMulApr = timeStaked * _apr;
-  //   uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, purrStaking.SECOND_YEAR(), Math.Rounding.Floor);
+    vm.warp(32 days);
+    uint256 timeStaked = block.timestamp - _start;
+    uint256 timeStakedMulApr = timeStaked * _apr;
+    uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, purrStaking.SECOND_YEAR(), Math.Rounding.Floor);
 
-  //   vm.warp(2 days);
-  //   uint256 reward = purrStaking.getPendingReward(1);
+    vm.warp(32 days);
+    uint256 reward = purrStaking.getPendingReward(1);
 
-  //   assertEq(_reward, reward);
+    assertEq(_reward, reward);
+  }  
 
-  // }  
+  function test_Expect_OtherCase_CalculatePendingReward() public {
+    PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
 
-  
+    dealTokens(launchPadToken, users.alice);
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
+    purrStaking.stake(30, PoolType.ONE);
+    vm.stopPrank();
 
+    assertEq(purrStaking.itemId(), 1);
+
+    ( , , uint256 _stakedAmount, uint256 _start, , PoolType _pool_Type) = purrStaking.userPoolInfo(1);
+
+    (uint16 _apr, , , , , , , ) = purrStaking.poolInfo(_pool_Type);
+
+    vm.warp(32 days);
+    uint256 timeStaked = block.timestamp - _start;
+    uint256 timeStakedMulApr = timeStaked * _apr;
+    uint256 _reward = (_stakedAmount * timeStakedMulApr) /purrStaking.SECOND_YEAR();
+
+    vm.warp(32 days);
+    uint256 reward = purrStaking.getPendingReward(1);
+
+    assertEq(_reward, reward);
+  }  
+
+  function test_ShouldRevert_InsufficientBalance_ClaimReward() public {
+    
+    PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
+
+    dealTokens(launchPadToken, users.alice);
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
+    purrStaking.stake(30, PoolType.ONE);
+    vm.stopPrank();
+
+    vm.startPrank(address(purrStaking));
+    launchPadToken.approve(address(this), 
+    launchPadToken.balanceOf(address(purrStaking)));
+    vm.stopPrank();
+
+    launchPadToken.transferFrom(address(purrStaking), users.bob, launchPadToken.balanceOf(address(purrStaking)));
+
+    bytes4 selector = bytes4(keccak256("InsufficientBalance(uint256)"));
+    vm.expectRevert(abi.encodeWithSelector(selector, launchPadToken.balanceOf(address(purrStaking))));
+    
+    vm.warp(32 days);
+    vm.startPrank(users.alice);
+    purrStaking.claimReward(1);
+  }
+
+  function test_ShouldRevert_InsufficientAllowance_ClaimReward() public {
+    PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
+
+    dealTokens(launchPadToken, users.alice);
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
+    purrStaking.stake(30, PoolType.ONE);
+    vm.stopPrank();
+
+    bytes4 selector = bytes4(keccak256("ERC20InsufficientAllowance(address,uint256,uint256)"));
+    vm.expectRevert(abi.encodeWithSelector(selector, address(purrStaking), launchPadToken.allowance(address(purrStaking), address(purrStaking)), 2));
+    
+    vm.warp(32 days);
+    vm.startPrank(users.alice);
+    purrStaking.claimReward(1);
+  }
+
+  function test_Expect_ClaimReward() public {
+    PoolInfo memory pool = createPoolInfo(1, 0, 1, 30 days, 10, 1000, 2, PoolType.ONE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
+
+    dealTokens(launchPadToken, users.alice);
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
+    purrStaking.stake(30, PoolType.ONE);
+    vm.stopPrank();
+
+    vm.prank(address(purrStaking));
+    launchPadToken.approve(address(purrStaking), 30);
+    
+    uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
+    uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+
+    vm.warp(32 days);
+    vm.startPrank(users.alice);
+    purrStaking.claimReward(1);
+
+    uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
+    uint256 reward = newBalanceUser - oldBalanceUser;
+    assertEq(reward, purrStaking.getPendingReward(1));
+
+    uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+    uint256 give_reward = oldBalancePurrStaking - newBalancePurrStaking;
+    assertEq(give_reward, purrStaking.getPendingReward(1));
+  }
 }

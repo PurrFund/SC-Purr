@@ -1,7 +1,7 @@
 // SPDX-License-Identifer: MIT
 pragma solidity ^0.8.20;
 
-import { PoolType } from "../types/PurrStaingType.sol";
+import { PoolType, PoolInfo } from "../types/PurrStaingType.sol";
 
 contract IPurrStaking {
     // event list
@@ -15,8 +15,9 @@ contract IPurrStaking {
         PoolType poolType
     );
     event UnStake(address indexed staker, uint256 amount, uint256 time, uint256 point, uint256 weight, PoolType tier);
-
+    event UpdatePool(PoolInfo pool);
     // error list
+
     error InsufficientAmount(uint256 amount);
     error InsufficientAlowances(uint256 amount);
     error ExceedBalance(uint256 amount);

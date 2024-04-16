@@ -47,12 +47,16 @@ contract PurrStaking is IPurrStaking, Ownable {
         _stake(_amount, _poolType);
     }
 
-    function getPendingReward(uint256 _itemId) external returns (uint256) {
+    function getPendingReward(uint256 _itemId) external view returns (uint256) {
         return _calculatePendingReward(_itemId);
     }
 
     function claimReward(uint256 _itemId) external {
         _claimReward(_itemId);
+    }
+
+    function updatePool(PoolInfo memory _pool) external onlyOwner {
+        poolInfo[_pool.poolType] = _pool;
     }
 
     /**

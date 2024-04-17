@@ -216,8 +216,9 @@ contract PurrStaking is IPurrStaking, Ownable {
         PoolInfo memory pool = poolInfo[userPool.poolType];
         uint256 timeStaked = block.timestamp - userPool.start;
         uint256 timeStakedMulApr = timeStaked * pool.apr;
-
-        return userPool.stakedAmount.mulDiv(timeStakedMulApr, SECOND_YEAR, Math.Rounding.Floor);
+        uint256 div = 100000 * SECOND_YEAR; 
+        
+        return userPool.stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
     }
 
     function _beforeWithDraw() internal { }

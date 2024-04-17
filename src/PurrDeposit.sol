@@ -5,7 +5,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
 
@@ -13,32 +12,55 @@ import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
  * @title PurrDeposit.
  * @notice Track investment amount.
  */
-contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
+contract PurrDeposit is Ownable, IPurrDeposit {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
     address public rootAdmin;
-    IERC20 public usdc;
+    address public subAdmin;
+    bool public canWithDraw;
+    IERC20 public usd;
 
-    constructor(address _initialOwner, address _usdc, address _rootAdmin) Ownable(_initialOwner) {
-        usdc = IERC20(_usdc);
+    mapping(address depositor => uint256 amount) depositorInfo;
+
+    constructor(address _initialOwner, address _usd, address _rootAdmin, address _subAdmin) Ownable(_initialOwner) {
+        usd = IERC20(_usd);
         rootAdmin = _rootAdmin;
+        subAdmin = _subAdmin;
+        canWithDraw = true;
+    }
+
+    modifier onlySubAdmin() {
+        if (msg.sender != subAdmin) {
+            revert InvalidSubAdmin(msg.sender);
+        }
+        _;
+    }
+
+    modifier onlyRootAdmin() {
+        if (msg.sender != rootAdmin) {
+            revert InvalidRootAdmin(msg.sender);
+        }
+        _;
     }
 
     /**
      * @inheritdoc IPurrDeposit
      */
-    function deposit(uint256 _amount) external nonReentrant {
+    function deposit(uint256 _amount) external {
         address sender = msg.sender;
+
         if (_amount <= 0) {
             revert InvalidAmount(_amount);
         }
 
-        if (usdc.allowance(sender, address(this)) < _amount) {
+        if (usd.allowance(sender, address(this)) < _amount) {
             revert InsufficientAllowance();
         }
 
-        usdc.safeTransferFrom(sender, rootAdmin, _amount);
+        depositorInfo[msg.sender] += _amount;
+
+        usd.safeTransferFrom(sender, address(this), _amount);
 
         emit Deposit(sender, address(this), _amount, block.timestamp);
     }
@@ -46,14 +68,125 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function setUsdc(address _usdc) external onlyOwner nonReentrant {
-        usdc = IERC20(_usdc);
+    function turnOffWihDraw() external onlySubAdmin {
+        if (msg.sender != subAdmin) {
+            revert InvalidSubAdmin(msg.sender);
+        }
+
+        canWithDraw = false;
+
+        emit UpdatePoolDeposit(canWithDraw);
+    }
+
+    /**
+     *
+     */
+    function turnOfWithDraw() external onlyOwner {
+        canWithDraw = true;
+
+        emit UpdatePoolDeposit(canWithDraw);
     }
 
     /**
      * @inheritdoc IPurrDeposit
      */
-    function setRootAdmin(address _rootAdmin) external onlyOwner nonReentrant {
+    function setUsdc(address _usd) external onlyOwner {
+        usd = IERC20(_usd);
+
+        emit SetUsd(address(usd));
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function setRootAdmin(address _rootAdmin) external onlyRootAdmin {
         rootAdmin = _rootAdmin;
+
+        emit UpdateRootAdmin(rootAdmin);
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function addFund(uint256 _amount) external {
+        address sender = msg.sender;
+
+        if (usd.balanceOf(sender) < _amount) {
+            revert InsufficientBalance(_amount);
+        }
+
+        if (usd.allowance(sender, address(this)) < _amount) {
+            revert InsufficientAllowance();
+        }
+
+        usd.safeTransferFrom(sender, address(this), _amount);
+
+        emit AddFund(sender, address(this), _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function withDrawRootAdmin(uint256 _amount) external onlyRootAdmin {
+        address sender = msg.sender;
+
+        if (usd.balanceOf(address(this)) < _amount) {
+            revert InsufficientBalance(_amount);
+        }
+
+        usd.safeTransferFrom(address(this), sender, _amount);
+
+        emit WithDrawAdmin(address(this), sender, _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function withDrawUser(uint256 _amount) external {
+        address sender = msg.sender;
+
+        if (!canWithDraw) {
+            revert CanNotWithDraw();
+        }
+
+        if (_amount <= 0) {
+            revert InvalidAmount(_amount);
+        }
+
+        if (usd.balanceOf(address(this)) < _amount) {
+            revert InsufficientTotalSupply(_amount);
+        }
+
+        if (depositorInfo[sender] < _amount) {
+            revert InsufficientBalance(_amount);
+        }
+
+        depositorInfo[msg.sender] -= _amount;
+
+        usd.safeTransferFrom(address(this), sender, _amount);
+
+        emit WithDrawUser(address(this), sender, _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function updateBalanceDepositor(address[] calldata depositorAddresses, uint256[] calldata amounts) external {
+        uint256 depositorLength = depositorAddresses.length;
+        uint256 amountLength = amounts.length;
+
+        if (depositorLength != amountLength) {
+            revert InvalidArgument();
+        }
+
+        for (uint256 i; i < depositorLength;) {
+            depositorInfo[depositorAddresses[i]] = amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        emit UpdateBalanceDepositor();
     }
 }

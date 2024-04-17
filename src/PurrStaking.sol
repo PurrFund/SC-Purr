@@ -57,6 +57,8 @@ contract PurrStaking is IPurrStaking, Ownable {
 
     function updatePool(PoolInfo memory _pool) external onlyOwner {
         poolInfo[_pool.poolType] = _pool;
+
+        emit UpdatePool(_pool);
     }
 
     /**
@@ -206,7 +208,7 @@ contract PurrStaking is IPurrStaking, Ownable {
             revert InsufficientBalance(launchPadToken.balanceOf(address(this)));
         }
 
-        IERC20(launchPadToken).safeTransferFrom(address(this), msg.sender, reward);
+        IERC20(launchPadToken).safeTransfer(msg.sender, reward);
     }
 
     function _calculatePendingReward(uint256 _itemId) internal view returns (uint256) {

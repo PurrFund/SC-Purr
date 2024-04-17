@@ -96,7 +96,6 @@ contract PurrStakingTest is BaseTest {
     purrStaking.stake(0, PoolType.THREE);
   }
 
-  
   function test_ShouldRevert_ERC20InsufficientAllowance_Stake() public {
     dealTokens(launchPadToken, users.alice);
 
@@ -182,21 +181,24 @@ contract PurrStakingTest is BaseTest {
     assertEq(_amountStake, 30);
   }
 
-  // function test_Expect_EmitEvent_Stake() public {
-  //   PoolInfo memory pool = createPoolInfo(2, 2, 2, 2 days, 2, 1000, 2, PoolType.THREE);
-  //   vm.prank(users.admin);
-  //   purrStaking.updatePool(pool);
+  function test_Expect_EmitEvent_Stake() public {
+    PoolInfo memory pool = createPoolInfo(2, 2, 2, 2 days, 2, 1000, 2, PoolType.THREE);
+    vm.prank(users.admin);
+    purrStaking.updatePool(pool);
 
-  //   dealTokens(launchPadToken, users.alice);
+    dealTokens(launchPadToken, users.alice);
 
-  //   vm.expectEmit(true, true, true, true, true, true, true);
-  //   emit Stake(users.alice, 1, 30, 60, block.timestamp, block.timestamp + 2 days, PoolType.THREE);
+    
+    
+    vm.startPrank(users.alice);
+    launchPadToken.approve(address(purrStaking), 30);
 
-  //   vm.startPrank(users.alice);
-  //   launchPadToken.approve(address(purrStaking), 30);
-  //   purrStaking.stake(30, PoolType.THREE);
-  //   vm.stopPrank();
-  // }
+    vm.expectEmit(true, true, false, true);
+    emit Stake(users.alice, 1, 30, 60, block.timestamp, block.timestamp + 2 days, PoolType.THREE);
+
+    purrStaking.stake(30, PoolType.THREE);
+    vm.stopPrank();
+  }
 
 
   function test_ShouldRevert_InvalidStaker_claimReward() public {

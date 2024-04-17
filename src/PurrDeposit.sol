@@ -6,6 +6,7 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
 
@@ -13,12 +14,13 @@ import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
  * @title PurrDeposit.
  * @notice Track investment amount.
  */
-contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
+contract PurrDeposit is Ownable, ReentrancyGuard, AccessControl, IPurrDeposit {
     using SafeERC20 for IERC20;
     using Math for uint256;
 
     address public rootAdmin;
     IERC20 public usdc;
+    bool public canWithDraw;
 
     constructor(address _initialOwner, address _usdc, address _rootAdmin) Ownable(_initialOwner) {
         usdc = IERC20(_usdc);
@@ -43,6 +45,8 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
         emit Deposit(sender, address(this), _amount, block.timestamp);
     }
 
+    // function setWithDrawStatus()
+
     /**
      * @inheritdoc IPurrDeposit
      */
@@ -55,5 +59,39 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
      */
     function setRootAdmin(address _rootAdmin) external onlyOwner nonReentrant {
         rootAdmin = _rootAdmin;
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function addFund(uint256 _amount) external {
+        address sender = msg.sender;
+
+        if (usdc.balanceOf(sender) < _amount) {
+            revert InsufficientBalance(_amount);
+        }
+
+        if (usdc.allowance(sender, address(this)) < _amount) {
+            revert InsufficientAllowance();
+        }
+
+        usdc.safeTransferFrom(sender, address(this), _amount);
+
+        emit AddFund(sender, address(this), _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrDeposit
+     */
+    function withDraw(uint256 _amount) external onlyOwner {
+        address sender = msg.sender;
+
+        if (usdc.balanceOf(address(this)) < _amount) {
+            revert InsufficientBalance(_amount);
+        }
+
+        usdc.safeTransferFrom(address(this), sender, _amount);
+
+        emit WithDraw(address(this), sender, _amount);
     }
 }

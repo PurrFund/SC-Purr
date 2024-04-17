@@ -26,9 +26,9 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
      * @inheritdoc IPurrLaunchPad
      */
     function createProject(
-        PreProject memory project,
-        LaunchPool memory launchPool,
-        LaunchPad memory launchPad
+        PreProject memory _project,
+        LaunchPool memory _launchPool,
+        LaunchPad memory _launchPad
     )
         external
         onlyOwner
@@ -36,23 +36,47 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         ++projectId;
         projectInfo[projectId] = Project({
             id: projectId,
-            owner: project.owner,
-            tokenIDO: project.tokenIDO,
-            tokenUseToBuy: project.tokenUseToBuy,
-            isRequireKyc: project.isRequireKyc,
-            isRequireStake: project.isRequireStake,
-            isRequrieVesting: project.isRequrieVesting,
-            useWhitelist: project.useWhitelist,
-            name: project.name,
-            twitter: project.twitter,
-            discord: project.discord,
-            telegram: project.telegram,
-            website: project.website
+            owner: _project.owner,
+            tokenIDO: _project.tokenIDO,
+            name: _project.name,
+            twitter: _project.twitter,
+            discord: _project.discord,
+            telegram: _project.telegram,
+            website: _project.website
         });
 
-        launchPoolInfo[projectId] = launchPool;
-        launchPadInfo[projectId] = launchPad;
+        launchPoolInfo[projectId] = _launchPool;
+        launchPadInfo[projectId] = _launchPad;
 
-        emit CreateProject(projectInfo[projectId], launchPad, launchPool);
+        emit CreateProject(projectInfo[projectId], _launchPad, _launchPool);
+    }
+
+    /**
+     * @inheritdoc IPurrLaunchPad
+     */
+    function updateProject(
+        uint64 _projectId,
+        PreProject memory _project,
+        LaunchPool memory _launchPool,
+        LaunchPad memory _launchPad
+    )
+        external
+        onlyOwner
+    {
+        projectInfo[_projectId] = Project({
+            id: _projectId,
+            owner: _project.owner,
+            tokenIDO: _project.tokenIDO,
+            name: _project.name,
+            twitter: _project.twitter,
+            discord: _project.discord,
+            telegram: _project.telegram,
+            website: _project.website
+        });
+
+        launchPoolInfo[projectId] = _launchPool;
+        launchPadInfo[projectId] = _launchPad;
+
+        emit CreateProject(projectInfo[projectId], _launchPad, _launchPool);
     }
 }

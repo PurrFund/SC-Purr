@@ -16,8 +16,8 @@ contract IPurrStaking {
     );
     event UnStake(address indexed staker, uint256 amount, uint256 time, uint256 point, uint256 weight, PoolType tier);
     event UpdatePool(PoolInfo pool);
-    // error list
 
+    // error list
     error InsufficientAmount(uint256 amount);
     error InsufficientAlowances(uint256 amount);
     error ExceedBalance(uint256 amount);

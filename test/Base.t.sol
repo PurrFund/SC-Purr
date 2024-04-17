@@ -33,8 +33,8 @@ abstract contract BaseTest is Test {
         return user;
     }
 
-    function dealTokens() internal {
-        deal({ token: address(usdc), to: users.admin, give: 1_000_000e6 });
+    function dealTokens(IERC20 _usdc, address _to) internal {
+        deal({ token: address(_usdc), to: _to, give: 1000 * 1e18 });
     }
 
     function deployCore() internal {

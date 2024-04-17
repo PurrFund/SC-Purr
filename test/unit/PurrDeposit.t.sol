@@ -13,7 +13,7 @@ contract PurrLaunchPadTest is BaseTest {
 
     function setUp() public {
         tokenPurr = new MockUSDC(users.admin);
-        purrDeposit = new PurrDeposit(users.admin, address(tokenPurr), users.admin);
+        purrDeposit = new PurrDeposit(users.admin, address(tokenPurr), users.admin, users.alice);
     }
 
     function test_ShouldRevert_Amount_Deposit() public {

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { BaseScript } from "../Base.s.sol";
 import { PurrDeposit } from "../../src/PurrDeposit.sol";
-import { MockUSDC } from "../../src/token/MockUSDC.sol";
+import { MockUSD } from "../../test/mocks/MockUSD.sol";
 
 contract DeployMockUSDCScript is BaseScript {
     address rootAdmin = vm.envAddress("ROOT_ADMIN");
@@ -22,9 +22,9 @@ contract DeployMockUSDCScript is BaseScript {
 
     function seedDeposit(address _deposit) public broadcast {
         for (uint256 i; i < seedAddress.length; i++) {
-            MockUSDC(usdc).mint(seedAddress[i], i * 1e18 * 1000);
+            MockUSD(usdc).mint(seedAddress[i], i * 1e18 * 1000);
             vm.startPrank(seedAddress[i]);
-            MockUSDC(usdc).approve(_deposit, i * 1e18 * 1000);
+            MockUSD(usdc).approve(_deposit, i * 1e18 * 1000);
             PurrDeposit(_deposit).deposit(i * 1e18);
             vm.stopPrank();
         }

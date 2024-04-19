@@ -6,12 +6,13 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title PurrDeposit.
  * @notice Track investment amount.
  */
-contract PurrDeposit is Ownable, IPurrDeposit {
+contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     using SafeERC20 for IERC20;
 
     address public rootAdmin;
@@ -45,7 +46,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function deposit(uint256 _amount) external {
+    function deposit(uint256 _amount) external nonReentrant {
         address sender = msg.sender;
 
         if (_amount <= 0) {
@@ -56,7 +57,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
 
         usd.safeTransferFrom(sender, address(this), _amount);
 
-        emit Deposit(sender, address(this), _amount, block.timestamp);
+        emit Deposit(sender, _amount, block.timestamp);
     }
 
     /**
@@ -84,8 +85,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
             revert InvalidAmount(_amount);
         }
 
-        usd.safeIncreaseAllowance(address(this), _amount);
-        usd.safeTransferFrom(address(this), sender, _amount);
+        usd.safeTransfer(sender, _amount);
 
         emit WithDrawRootAdmin(address(this), sender, _amount);
     }
@@ -93,7 +93,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function withDrawUser(uint256 _amount) external {
+    function withDrawUser(uint256 _amount) external nonReentrant {
         address sender = msg.sender;
 
         if (!canWithDraw) {
@@ -112,17 +112,17 @@ contract PurrDeposit is Ownable, IPurrDeposit {
             revert InsufficientBalance(_amount);
         }
 
-        depositorInfo[msg.sender] -= _amount;
+        depositorInfo[sender] -= _amount;
 
-        usd.safeTransferFrom(address(this), sender, _amount);
+        usd.safeTransfer(sender, _amount);
 
-        emit WithDrawUser(address(this), sender, _amount);
+        emit WithDrawUser(sender, _amount, block.timestamp);
     }
 
     /**
      * @inheritdoc IPurrDeposit
      */
-    function updateBalanceDepositor(address[] calldata depositorAddresses, uint256[] calldata amounts) external {
+    function updateBalanceDepositor(address[] calldata depositorAddresses, uint256[] calldata amounts) external onlyOwner {
         uint256 depositorLength = depositorAddresses.length;
         uint256 amountLength = amounts.length;
 
@@ -144,7 +144,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
      * @inheritdoc IPurrDeposit
      */
 
-    function turnOffWihDraw() external onlySubAdmin {
+    function turnOffWithDraw() external onlySubAdmin {
         canWithDraw = false;
 
         emit UpdatePoolDeposit(canWithDraw);
@@ -162,7 +162,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function setUsdc(address _usd) external onlyOwner {
+    function setUsd(address _usd) external onlyOwner {
         usd = IERC20(_usd);
 
         emit SetUsd(address(usd));
@@ -175,9 +175,5 @@ contract PurrDeposit is Ownable, IPurrDeposit {
         rootAdmin = _rootAdmin;
 
         emit UpdateRootAdmin(rootAdmin);
-    }
-
-    function getBalancePurrDeposit() external view returns (uint256) {
-        return usd.balanceOf(address(this));
     }
 }

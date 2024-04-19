@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 interface IPurrDeposit {
     // event list
-    event Deposit(address indexed depositor, address indexed receiver, uint256 amount, uint256 timeDeposit);
+    event Deposit(address indexed depositor, uint256 amount, uint256 timeDeposit);
     event AddFund(address indexed admin, address indexed receiver, uint256 amount);
     event WithDraw(address indexed sender, address indexed receiver, uint256 amount);
     event UpdatePoolDeposit(bool canWithDraw);
@@ -11,7 +11,7 @@ interface IPurrDeposit {
     event UpdateRootAdmin(address rootAdmin);
     event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
     event UpdateBalanceDepositor();
-    event WithDrawUser(address indexed sender, address indexed receiver, uint256 amount);
+    event WithDrawUser(address indexed sender, uint256 amount, uint256 timeWithDraw);
 
     // error list
     error InsufficientAllowance();
@@ -41,7 +41,7 @@ interface IPurrDeposit {
      * @notice Set usdc.
      * @param _usdc The usdc address.
      */
-    function setUsdc(address _usdc) external;
+    function setUsd(address _usdc) external;
 
     /**
      * @notice Set rootAdmin.
@@ -70,7 +70,7 @@ interface IPurrDeposit {
     /**
      * @notice Turn off with draw.
      */
-    function turnOffWihDraw() external;
+    function turnOffWithDraw() external;
 
     /**
      * @notice Turn off with draw.

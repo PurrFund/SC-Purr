@@ -7,6 +7,8 @@ struct UserPoolInfo {
     uint256 stakedAmount;
     uint256 start;
     uint256 end;
+    // use when poolType is ONE 
+    uint256 timeUnstaked;  
     PoolType poolType;
 }
 
@@ -22,6 +24,7 @@ struct PoolInfo {
     // form in 4 digit
     uint16 apr;
     uint8 unstakeFee;
+    // form in 2 digit 
     uint16 multiplier;
     uint32 lockDay;
     uint32 unstakeTime;

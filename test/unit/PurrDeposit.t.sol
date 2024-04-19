@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import { BaseTest } from "../Base.t.sol";
 import { MockUSD } from "../../test/mocks/MockUSD.sol";
 import { PurrDeposit } from "../../src/PurrDeposit.sol";
-import { IPurrDeposit } from "../../src/interfaces/IPurrDeposit.sol";
 
 contract PurrDepositTest is BaseTest {
     PurrDeposit public purrDeposit;

@@ -9,7 +9,7 @@ interface IPurrDeposit {
     event UpdatePoolDeposit(bool canWithDraw);
     event SetUsd(address usd);
     event UpdateRootAdmin(address rootAdmin);
-    event WithDrawAdmin(address indexed sender, address indexed receiver, uint256 amount);
+    event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
     event UpdateBalanceDepositor();
     event WithDrawUser(address indexed sender, address indexed receiver, uint256 amount);
 
@@ -75,7 +75,7 @@ interface IPurrDeposit {
     /**
      * @notice Turn off with draw.
      */
-    function turnOfWithDraw() external;
+    function updateStatusWithDraw(bool _canWithDraw) external;
     /**
      * @notice Update depositor's amount deposit in contract.
      *

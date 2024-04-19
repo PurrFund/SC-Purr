@@ -75,7 +75,7 @@ interface IPurrDeposit {
     /**
      * @notice Turn off with draw.
      */
-    function turnOfWithDraw(bool _canWithDraw) external;
+    function updateStatusWithDraw(bool _canWithDraw) external;
     /**
      * @notice Update depositor's amount deposit in contract.
      *

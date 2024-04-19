@@ -140,6 +140,7 @@ contract PurrDeposit is Ownable, IPurrDeposit {
 
         emit UpdateBalanceDepositor();
     }
+    
     /**
      * @inheritdoc IPurrDeposit
      */

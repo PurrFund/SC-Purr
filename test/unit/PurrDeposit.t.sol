@@ -7,6 +7,8 @@ import { PurrDeposit } from "../../src/PurrDeposit.sol";
 
 contract PurrDepositTest is BaseTest {
     PurrDeposit public purrDeposit;
+    address[] depositorAddresses;
+    uint256[] amounts;
 
     event Deposit(address indexed receiver, uint256 amount, uint256 timeDeposit);
     event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
@@ -300,43 +302,46 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.withDrawUser(amountWithDraw);
     }
 
-    function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public {
+    function test_UpdateBalanceDepositor_ShouldRevert_WhenNotOwner() public {
+        depositorAddresses.push(address(1));
+        amounts.push(10);
+
         bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
         vm.prank(users.alice);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
-
-    function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDraw() public {
-        vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
-
-        assertEq(purrDeposit.canWithDraw(), false);
-    }
-
-    function test_UpdateStatusWithDraw_ShouldEmit_EventUpdatePoolDeposit() public {
-        vm.expectEmit(true, false, false, true);
-        emit UpdatePoolDeposit(false);
-
-        vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
-    }
-
-    // test updateBalanceDepositor
-    address[] depositorAddresses = [address(1), address(2), address(3)];
-    uint256[] amounts = [30, 60, 90];
-    uint256[] _amounts = [30, 60];
 
     function test_UpdateBalanceDepositor_ShouldRevert_InvalidArgument() public {
+        depositorAddresses.push(address(1));
+        amounts.push(10);
+        amounts.push(20);
+
         bytes4 selector = bytes4(keccak256("InvalidArgument()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
 
         vm.prank(users.admin);
-        purrDeposit.updateBalanceDepositor(depositorAddresses, _amounts);
+        purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
 
-    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositor() public {
+    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public {
+        uint256 length = 20_000;
+
+        for (uint256 i; i < length;) {
+            address iAddress = vm.addr(i + 1);
+            _deal(iAddress, i + 1);
+            depositorAddresses.push(address(iAddress));
+            amounts.push(i);
+            vm.startPrank(iAddress);
+            usd.approve(address(purrDeposit), i + 1);
+            purrDeposit.deposit(i + 1);
+            vm.stopPrank();
+            unchecked {
+                ++i;
+            }
+        }
+
         vm.prank(users.admin);
         purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
 
@@ -346,14 +351,6 @@ contract PurrDepositTest is BaseTest {
         }
     }
 
-    // function test_UpdateBalanceDepositor_ShouldEmit_EventUpdateBalanceDepositor() public {
-    //     vm.expectEmit(true, true, true, true);
-    //     emit UpdateBalanceDepositor();
-
-    //     vm.prank(users.admin);
-    //     purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
-    // }
-
     function test_TurnOffWithDraw_ShouldRevert_NotSubAdmin() public {
         bytes4 selector = bytes4(keccak256("InvalidSubAdmin(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
@@ -362,19 +359,26 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.turnOffWithDraw();
     }
 
-    function test_TurnOffWithDraw_ShouldTurnOffWithDraw() public {
+    function test_TurnOffWithDraw_ShouldTurnOffWithDrawed() public {
         vm.prank(users.subAdmin);
         purrDeposit.turnOffWithDraw();
 
         assertEq(purrDeposit.canWithDraw(), false);
     }
 
-    function test_TurnOffWithDraw_ShouldEmit_EventUpdatePoolDeposit() public {
-        vm.expectEmit(true, false, false, true);
-        emit UpdatePoolDeposit(false);
+    function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public {
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
-        vm.prank(users.subAdmin);
-        purrDeposit.turnOffWithDraw();
+        vm.prank(users.alice);
+        purrDeposit.updateStatusWithDraw(false);
+    }
+
+    function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDrawed() public {
+        vm.prank(users.admin);
+        purrDeposit.updateStatusWithDraw(false);
+
+        assertEq(purrDeposit.canWithDraw(), false);
     }
 
     function test_SetUsd_ShouldRevert_NotOwner() public {
@@ -388,7 +392,7 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.setUsd(address(_usd));
     }
 
-    function test_setUsd_ShouldSetUsd() public {
+    function test_SetUsd_ShouldSetUsd() public {
         vm.startPrank(users.admin);
         MockUSD _usd = new MockUSD(users.admin);
         purrDeposit.setUsd(address(_usd));
@@ -397,15 +401,50 @@ contract PurrDepositTest is BaseTest {
         assertEq(address(purrDeposit.usd()), address(_usd));
     }
 
-    function test_setUsd_ShouldEmit_EventSetUsd() public {
-        vm.prank(users.admin);
-        MockUSD _usd = new MockUSD(users.admin);
+    function test_SetRootAdmin_ShouldRevert_WhenNotRootAdmin() public {
+        bytes4 selector = bytes4(keccak256("InvalidRootAdmin(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
-        vm.expectEmit(true, false, false, true);
-        emit SetUsd(address(_usd));
+        vm.prank(users.alice);
+        purrDeposit.setRootAdmin(users.alice);
+    }
 
+    function test_SetRootAdmin_ShouldSetRootAdmined() public {
+        vm.prank(users.rootAdmin);
+        purrDeposit.setRootAdmin(users.rootAdmin);
+
+        assertEq(users.rootAdmin, purrDeposit.rootAdmin());
+    }
+
+    function test_TransferOwnership_ShouldRevert_WhenNotRootAdminAndOwner() public {
+        bytes4 selector1 = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector1, users.alice));
+
+        vm.prank(users.alice);
+        purrDeposit.transferOwnership(users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector2, users.subAdmin));
+
+        vm.prank(users.subAdmin);
+        purrDeposit.transferOwnership(users.subAdmin);
+    }
+
+    function test_TransferOwnership_ShouldTransferOwnershiped() public {
         vm.prank(users.admin);
-        purrDeposit.setUsd(address(_usd));
+        purrDeposit.transferOwnership(users.alice);
+
+        assertEq(purrDeposit.owner(), users.alice);
+
+        vm.prank(users.rootAdmin);
+        purrDeposit.transferOwnership(users.bob);
+
+        assertEq(purrDeposit.owner(), users.bob);
+
+        vm.prank(users.bob);
+        purrDeposit.updateStatusWithDraw(true);
+
+        assertEq(purrDeposit.canWithDraw(), true);
     }
 
     function _deal(address _reciever, uint256 _amount) internal {

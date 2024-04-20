@@ -4,9 +4,9 @@ pragma solidity ^0.8.20;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title PurrDeposit.
@@ -39,6 +39,13 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     modifier onlyRootAdmin() {
         if (msg.sender != rootAdmin) {
             revert InvalidRootAdmin(msg.sender);
+        }
+        _;
+    }
+
+    modifier onlyRootAdminAndOwner() {
+        if (msg.sender != rootAdmin && msg.sender != owner()) {
+            revert OwnableUnauthorizedAccount(msg.sender);
         }
         _;
     }
@@ -122,41 +129,41 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function updateBalanceDepositor(address[] calldata depositorAddresses, uint256[] calldata amounts) external onlyOwner {
-        uint256 depositorLength = depositorAddresses.length;
-        uint256 amountLength = amounts.length;
+    function updateBalanceDepositor(address[] calldata _depositorAddresses, uint256[] calldata _amounts) external onlyOwner {
+        uint256 depositorLength = _depositorAddresses.length;
+        uint256 amountLength = _amounts.length;
 
         if (depositorLength != amountLength) {
             revert InvalidArgument();
         }
 
         for (uint256 i; i < depositorLength;) {
-            depositorInfo[depositorAddresses[i]] = amounts[i];
+            uint256 _amount = _amounts[i];
+
+            if (depositorInfo[_depositorAddresses[i]] < _amount) {
+                revert InvalidUpdateAmount(_depositorAddresses[i], _amount);
+            }
+
+            depositorInfo[_depositorAddresses[i]] = _amount;
 
             unchecked {
                 ++i;
             }
         }
-
-        emit UpdateBalanceDepositor();
     }
+
     /**
      * @inheritdoc IPurrDeposit
      */
-
     function turnOffWithDraw() external onlySubAdmin {
         canWithDraw = false;
-
-        emit UpdatePoolDeposit(canWithDraw);
     }
 
     /**
-     *
+     * @inheritdoc IPurrDeposit
      */
     function updateStatusWithDraw(bool _canWithDraw) external onlyOwner {
         canWithDraw = _canWithDraw;
-
-        emit UpdatePoolDeposit(canWithDraw);
     }
 
     /**
@@ -164,8 +171,6 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
      */
     function setUsd(address _usd) external onlyOwner {
         usd = IERC20(_usd);
-
-        emit SetUsd(address(usd));
     }
 
     /**
@@ -173,7 +178,20 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
      */
     function setRootAdmin(address _rootAdmin) external onlyRootAdmin {
         rootAdmin = _rootAdmin;
+    }
 
-        emit UpdateRootAdmin(rootAdmin);
+    /**
+     * @notice Transfers ownership of the contract to a new account (`newOwner`).
+     *
+     * @dev Override function {transferOwnership} in {Ownable} contract.
+     * @dev Only rootadmin or owner can call this function.
+     *
+     * @param newOwner The new owner address.
+     */
+    function transferOwnership(address newOwner) public override onlyRootAdminAndOwner {
+        if (newOwner == address(0)) {
+            revert OwnableInvalidOwner(address(0));
+        }
+        _transferOwnership(newOwner);
     }
 }

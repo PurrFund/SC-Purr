@@ -10,7 +10,7 @@ contract DeployPurrLaunchPadScript is BaseScript {
     PreProject project;
     LaunchPool launchPool;
     LaunchPad launchPad;
-    address usdc = 0xcB269E7e42D8728C91CCF840c27A25f11285548f;
+    address usd = 0xcB269E7e42D8728C91CCF840c27A25f11285548f;
     uint64[] time;
     uint16[] percent;
 

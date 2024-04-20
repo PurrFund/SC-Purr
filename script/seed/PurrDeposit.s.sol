@@ -5,10 +5,10 @@ import { BaseScript } from "../Base.s.sol";
 import { PurrDeposit } from "../../src/PurrDeposit.sol";
 import { MockUSD } from "../../test/mocks/MockUSD.sol";
 
-contract DeployMockUSDCScript is BaseScript {
+contract DeployMockusdScript is BaseScript {
     address rootAdmin = vm.envAddress("ROOT_ADMIN");
-    // mock usdc
-    address usdc = 0xcB269E7e42D8728C91CCF840c27A25f11285548f;
+    // mock usd
+    address usd = 0xcB269E7e42D8728C91CCF840c27A25f11285548f;
     address[] seedAddress = [
         0x9C623EfF30c8BCba288fc0346C44576d3c7FF52C,
         0x1405dC6c6cB6Cb9480F01E3E43a5ec89f680Cb8D,
@@ -22,9 +22,9 @@ contract DeployMockUSDCScript is BaseScript {
 
     function seedDeposit(address _deposit) public broadcast {
         for (uint256 i; i < seedAddress.length; i++) {
-            MockUSD(usdc).mint(seedAddress[i], i * 1e18 * 1000);
+            MockUSD(usd).mint(seedAddress[i], i * 1e18 * 1000);
             vm.startPrank(seedAddress[i]);
-            MockUSD(usdc).approve(_deposit, i * 1e18 * 1000);
+            MockUSD(usd).approve(_deposit, i * 1e18 * 1000);
             PurrDeposit(_deposit).deposit(i * 1e18);
             vm.stopPrank();
         }

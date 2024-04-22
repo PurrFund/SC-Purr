@@ -18,7 +18,7 @@ contract PurrStakingTest is BaseTest {
     TierInfo[] tierInfos;
     uint256 initBalance;
 
-     event Stake(
+    event Stake(
         address indexed staker,
         uint256 indexed itemId,
         uint256 amount,
@@ -29,6 +29,8 @@ contract PurrStakingTest is BaseTest {
     );
 
     event UpdatePool(PoolInfo pool);
+    event ClaimReward(address indexed claimer, uint256 amount, uint64 claimAt);
+    event UpdateTier(TierInfo tier);
 
     function setUp() public {
         _initPools();
@@ -95,7 +97,7 @@ contract PurrStakingTest is BaseTest {
         vm.prank(users.alice);
         assertEq(purrStaking.getUserItemId()[0], 1);
         assertEq(launchPadToken.balanceOf(users.alice), initBalance - amount);
-        uint256 posPurrBL  = amount + initBalance; 
+        uint256 posPurrBL = amount + initBalance;
         assertEq(launchPadToken.balanceOf(address(purrStaking)), posPurrBL);
     }
 
@@ -109,11 +111,71 @@ contract PurrStakingTest is BaseTest {
 
         vm.expectEmit(true, true, true, true);
         emit Stake(
-            users.alice, purrStaking.itemId() + 1, amount, pointExpect, uint64(block.timestamp), uint64(block.timestamp + lockDay), PoolType.FOUR
+            users.alice,
+            purrStaking.itemId() + 1,
+            amount,
+            pointExpect,
+            uint64(block.timestamp),
+            uint64(block.timestamp + lockDay),
+            PoolType.FOUR
         );
 
         purrStaking.stake(amount, PoolType.FOUR);
         vm.stopPrank();
+    }
+
+    function test_Unstake_ShouldRevert_WhenInvalidAmount() public {
+        uint256 amount = 10e18;
+        uint256 itemId = 1;
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 0));
+
+        vm.prank(users.alice);
+        purrStaking.unstake(0, itemId);
+
+        uint256 exceedAmount = 11e18;
+        vm.startPrank(users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("InvalidAmount(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector2, exceedAmount));
+        purrStaking.unstake(exceedAmount, itemId);
+
+        vm.stopPrank();
+    }
+
+    function test_Unstake_ShouldRevert_WhenInvalidStaker() public {
+        uint256 amount = 10e18;
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        purrStaking.userPoolInfo(1);
+
+        bytes4 selector = bytes4(keccak256("InvalidStaker(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.bob));
+        vm.prank(users.bob);
+        purrStaking.unstake(amount, 1);
+    }
+
+    function test_Unstake_ShouldUnstaked_PoolOne() public {
+        uint256 amount = 10e18;
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        purrStaking.userPoolInfo(1);
+
+        bytes4 selector = bytes4(keccak256("InvalidStaker(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.bob));
+        vm.prank(users.bob);
+        purrStaking.unstake(amount, 1);
     }
 
     function test_GetPendingReward_ShouldRight_PoolONE() public {
@@ -127,16 +189,16 @@ contract PurrStakingTest is BaseTest {
 
         (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
-        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+        (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
-        vm.warp(32 days);
+        vm.warp(365 days + 1 seconds);
         uint256 timeStaked = block.timestamp - updateAt;
-        uint256 expectTimeStaked = 32 days - 1 seconds;
+        uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
         assertEq(timeStaked, expectTimeStaked);
 
-        uint256 timeStakedMulApr = expectTimeStaked * apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+        uint256 timeStakedMulApy = expectTimeStaked * apy;
+        uint256 div = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
 
         uint256 actualReward = purrStaking.getPendingReward(1);
 
@@ -154,16 +216,16 @@ contract PurrStakingTest is BaseTest {
 
         (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
-        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+        (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
         vm.warp(365 days + 1 seconds);
         uint256 timeStaked = block.timestamp - updateAt;
         uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
         assertEq(timeStaked, expectTimeStaked);
 
-        uint256 timeStakedMulApr = expectTimeStaked * apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+        uint256 timeStakedMulApy = expectTimeStaked * apy;
+        uint256 div = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
 
         uint256 actualReward = purrStaking.getPendingReward(1);
 
@@ -181,16 +243,16 @@ contract PurrStakingTest is BaseTest {
 
         (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
-        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+        (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
         vm.warp(365 days + 1 seconds);
         uint256 timeStaked = block.timestamp - updateAt;
         uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
         assertEq(timeStaked, expectTimeStaked);
 
-        uint256 timeStakedMulApr = expectTimeStaked * apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+        uint256 timeStakedMulApy = expectTimeStaked * apy;
+        uint256 div = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
 
         uint256 actualReward = purrStaking.getPendingReward(1);
 
@@ -208,16 +270,16 @@ contract PurrStakingTest is BaseTest {
 
         (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
-        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+        (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
         vm.warp(365 days + 1 seconds);
         uint256 timeStaked = block.timestamp - updateAt;
         uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
         assertEq(timeStaked, expectTimeStaked);
 
-        uint256 timeStakedMulApr = expectTimeStaked * apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+        uint256 timeStakedMulApy = expectTimeStaked * apy;
+        uint256 div = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
 
         uint256 actualReward = purrStaking.getPendingReward(1);
 
@@ -240,16 +302,16 @@ contract PurrStakingTest is BaseTest {
 
     function test_ClaimReward_ShouldRevert_WhenInsufficientBalance() public {
         uint256 amount = 100e18;
-        uint256 itemId = 1; 
+        uint256 itemId = 1;
         vm.startPrank(users.alice);
         launchPadToken.approve(address(purrStaking), amount);
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
-        
+
         vm.startPrank(address(purrStaking));
-        launchPadToken.transfer(users.maker, amount  + initBalance); 
+        launchPadToken.transfer(users.maker, amount + initBalance);
         vm.stopPrank();
-        
+
         vm.warp(1000 days);
         bytes4 selector = bytes4(keccak256("InsufficientBalance(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, launchPadToken.balanceOf(address(purrStaking))));
@@ -258,73 +320,169 @@ contract PurrStakingTest is BaseTest {
         purrStaking.claimReward(itemId);
     }
 
-    // function test_ClaimReward_ShouldClaimRewarded() public {
-    //     uint256 amount = 100e18; 
-    //     uint256 
+    function test_ClaimReward_ShouldClaimRewarded() public {
+        uint256 amount = 100e18;
+        uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
+        uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
+        uint256 itemId = 1;
 
-    //     vm.startPrank(users.alice);
-    //     launchPadToken.approve(address(purrStaking), amount);
-    //     purrStaking.stake(amount, PoolType.ONE);
-    //     vm.stopPrank();
+        vm.warp(1 seconds);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.ONE);
+        vm.stopPrank();
 
-    //     _deal(address(purrStaking), )
-    //     launchPadToken.approve(address(purrStaking), 30 * 1e18);
+        vm.warp(32 days);
 
-    //     uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
-    //     uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+        uint256 currentPendingReward = purrStaking.getPendingReward(1);
+        vm.prank(users.alice);
+        purrStaking.claimReward(itemId);
 
-    //     vm.warp(32 days);
-    //     vm.startPrank(users.alice);
-    //     purrStaking.claimReward(1);
+        (uint64 updateAt,,,,,,,) = purrStaking.userPoolInfo(itemId);
 
-    //     uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
-    //     uint256 reward = newBalanceUser - oldBalanceUser;
-    //     assertEq(reward, purrStaking.getPendingReward(1));
+        uint256 posPurrBL = launchPadToken.balanceOf(address(purrStaking));
+        uint256 posAliceBL = launchPadToken.balanceOf(users.alice);
 
-    //     uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
-    //     uint256 give_reward = oldBalancePurrStaking - newBalancePurrStaking;
-    //     assertEq(give_reward, purrStaking.getPendingReward(1));
-    // }
+        assertEq(posAliceBL + amount - preAliceBL, currentPendingReward);
+        assertEq(prePurrBL + amount - posPurrBL, currentPendingReward);
+        assertEq(updateAt, 32 days);
+    }
 
-    // function test_Expect_UpdatePool() public view {
-    //     PoolInfo memory pool3 = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
+    function test_ClaimReward_ShouldEmit_EventClaimReward() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1;
 
-    //     (
-    //         uint16 _apr,
-    //         uint8 _unstakeFee,
-    //         uint16 _multiplier,
-    //         uint32 _lockDay,
-    //         uint32 _unstakeTime,
-    //         uint256 _totalStaked,
-    //         uint256 _numberStaker,
-    //         PoolType _poolType
-    //     ) = purrStaking.poolInfo(PoolType.THREE);
-    //     PoolInfo memory retrievedPool = PoolInfo({
-    //         apr: _apr,
-    //         unstakeFee: _unstakeFee,
-    //         multiplier: _multiplier,
-    //         lockDay: _lockDay,
-    //         unstakeTime: _unstakeTime,
-    //         totalStaked: _totalStaked,
-    //         numberStaker: _numberStaker,
-    //         poolType: _poolType
-    //     });
-    //     assertEq(abi.encode(pool3), abi.encode(retrievedPool));
-    // }
+        vm.warp(1 seconds);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.ONE);
+        vm.stopPrank();
 
-    // function test_Expect_EmitEvent_UpdatePool() public {
-    //     PoolInfo memory pool = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
+        vm.warp(32 days);
+        uint256 currentPendingReward = purrStaking.getPendingReward(1);
 
-    //     vm.expectEmit(true, false, false, true);
-    //     emit UpdatePool(pool);
+        vm.expectEmit(true, true, true, true);
+        emit ClaimReward(users.alice, currentPendingReward, uint64(32 days));
 
-    //     vm.prank(users.admin);
-    //     purrStaking.updatePool(pool);
-    // }
+        vm.prank(users.alice);
+        purrStaking.claimReward(itemId);
+    }
+
+    function test_UpdatePool_ShouldRevert_WhenNotOwner() public {
+        PoolInfo memory pool4 = PoolInfo({
+            apy: 2500,
+            unstakeFee: 300,
+            multiplier: 2,
+            lockDay: 240 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.FOUR
+        });
+
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrStaking.updatePool(pool4);
+    }
+
+    function test_UpdatePool_ShouldUpdatePooled() public {
+        PoolInfo memory expectPool = PoolInfo({
+            apy: 2500,
+            unstakeFee: 300,
+            multiplier: 2,
+            lockDay: 240 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.FOUR
+        });
+
+        vm.prank(users.admin);
+        purrStaking.updatePool(expectPool);
+        (
+            uint16 unstakeFee,
+            uint16 apy,
+            uint16 multiplier,
+            uint32 lockDay,
+            uint32 unstakeTime,
+            uint256 totalStaked,
+            uint256 numberStaker,
+            PoolType poolType
+        ) = purrStaking.poolInfo(PoolType.FOUR);
+
+        PoolInfo memory actualPool = PoolInfo({
+            apy: apy,
+            unstakeFee: unstakeFee,
+            multiplier: multiplier,
+            lockDay: lockDay,
+            unstakeTime: unstakeTime,
+            totalStaked: totalStaked,
+            numberStaker: numberStaker,
+            poolType: poolType
+        });
+
+        assertEq(abi.encode(expectPool), abi.encode(actualPool));
+    }
+
+    function test_UpdatePool_EmitEvent_UpdatePool() public {
+        PoolInfo memory expectPool = PoolInfo({
+            apy: 2500,
+            unstakeFee: 300,
+            multiplier: 2,
+            lockDay: 240 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.FOUR
+        });
+
+        vm.prank(users.admin);
+        purrStaking.updatePool(expectPool);
+
+        vm.expectEmit(true, true, true, true);
+        emit UpdatePool(expectPool);
+
+        vm.prank(users.admin);
+        purrStaking.updatePool(expectPool);
+    }
+
+    function test_UpdateTier_ShouldRevert_WhenNotOwner() public {
+        TierInfo memory tier1 = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000, tierType: TierType.TWO });
+
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrStaking.updateTier(tier1);
+    }
+
+    function test_UpdateTier_ShouldUpdateTiered() public {
+        TierInfo memory expectTier = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000, tierType: TierType.TWO });
+
+        vm.prank(users.admin);
+        purrStaking.updateTier(expectTier);
+        (uint16 lotteryProbabilities, uint16 poolWeight, uint256 pPoint, TierType tierType) = purrStaking.tierInfo(TierType.TWO);
+        TierInfo memory actualTier =
+            TierInfo({ lotteryProbabilities: lotteryProbabilities, poolWeight: poolWeight, pPoint: pPoint, tierType: tierType });
+
+        assertEq(abi.encode(expectTier), abi.encode(actualTier));
+    }
+
+    function test_UpdateTier_EmitEvent_UpdateTier() public {
+        TierInfo memory expectTier = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000, tierType: TierType.TWO });
+
+        vm.expectEmit(true, true, true, true);
+        emit UpdateTier(expectTier);
+
+        vm.prank(users.admin);
+        purrStaking.updateTier(expectTier);
+    }
 
     function _initPools() internal {
         PoolInfo memory pool1 = PoolInfo({
-            apr: 1000,
+            apy: 900,
             unstakeFee: 0,
             multiplier: 10,
             lockDay: 30 days,
@@ -334,8 +492,8 @@ contract PurrStakingTest is BaseTest {
             poolType: PoolType.ONE
         });
         PoolInfo memory pool2 = PoolInfo({
-            apr: 3000,
-            unstakeFee: 1000,
+            apy: 1200,
+            unstakeFee: 100,
             multiplier: 15,
             lockDay: 60 days,
             unstakeTime: 0,
@@ -344,8 +502,8 @@ contract PurrStakingTest is BaseTest {
             poolType: PoolType.TWO
         });
         PoolInfo memory pool3 = PoolInfo({
-            apr: 9000,
-            unstakeFee: 2000,
+            apy: 1600,
+            unstakeFee: 200,
             multiplier: 20,
             lockDay: 150 days,
             unstakeTime: 0,
@@ -354,8 +512,8 @@ contract PurrStakingTest is BaseTest {
             poolType: PoolType.THREE
         });
         PoolInfo memory pool4 = PoolInfo({
-            apr: 15_000,
-            unstakeFee: 3000,
+            apy: 2100,
+            unstakeFee: 300,
             multiplier: 25,
             lockDay: 240 days,
             unstakeTime: 0,
@@ -370,12 +528,13 @@ contract PurrStakingTest is BaseTest {
     }
 
     function _initTiers() internal {
-        TierInfo memory tier1 = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000 });
-        TierInfo memory tier2 = TierInfo({ lotteryProbabilities: 2534, poolWeight: 1, pPoint: 4000 });
-        TierInfo memory tier3 = TierInfo({ lotteryProbabilities: 5143, poolWeight: 1, pPoint: 10_000 });
-        TierInfo memory tier4 = TierInfo({ lotteryProbabilities: 7813, poolWeight: 2, pPoint: 30_000 });
-        TierInfo memory tier5 = TierInfo({ lotteryProbabilities: 9553, poolWeight: 5, pPoint: 60_000 });
-        TierInfo memory tier6 = TierInfo({ lotteryProbabilities: 10_000, poolWeight: 10, pPoint: 100_000 });
+        TierInfo memory tier1 = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000, tierType: TierType.ONE });
+        TierInfo memory tier2 = TierInfo({ lotteryProbabilities: 2534, poolWeight: 1, pPoint: 4000, tierType: TierType.TWO });
+        TierInfo memory tier3 = TierInfo({ lotteryProbabilities: 5143, poolWeight: 1, pPoint: 10_000, tierType: TierType.THREE });
+        TierInfo memory tier4 = TierInfo({ lotteryProbabilities: 7813, poolWeight: 2, pPoint: 30_000, tierType: TierType.FOUR });
+        TierInfo memory tier5 = TierInfo({ lotteryProbabilities: 9553, poolWeight: 5, pPoint: 60_000, tierType: TierType.FIVE });
+        TierInfo memory tier6 =
+            TierInfo({ lotteryProbabilities: 10_000, poolWeight: 10, pPoint: 100_000, tierType: TierType.SIX });
 
         tierInfos.push(tier1);
         tierInfos.push(tier2);

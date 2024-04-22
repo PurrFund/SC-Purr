@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.20;
 
-import { LaunchPool, LaunchPad, PreProject, Project } from "../types/LaunchPadType.sol";
+import { LaunchPool, LaunchPad, PreProject, Project } from "../types/PurrLaunchPadType.sol";
 
 interface IPurrLaunchPad {
     // event list

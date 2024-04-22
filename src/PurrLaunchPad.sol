@@ -5,7 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { LaunchPool, LaunchPad, PreProject, Project } from "./types/LaunchPadType.sol";
+import { LaunchPool, LaunchPad, PreProject, Project } from "./types/PurrLaunchPadType.sol";
 import { IPurrLaunchPad } from "./interfaces/IPurrLaunchPad.sol";
 
 /**
@@ -77,6 +77,6 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         launchPoolInfo[projectId] = _launchPool;
         launchPadInfo[projectId] = _launchPad;
 
-        emit CreateProject(projectInfo[projectId], _launchPad, _launchPool);
+        emit UpdateProject(projectInfo[projectId], _launchPad, _launchPool);
     }
 }

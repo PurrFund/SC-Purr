@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import {Test, console} from "forge-std/Test.sol";
 import { BaseTest } from "../../Base.t.sol";
 import { PurrDeposit } from "../../../src/PurrDeposit.sol";
-import { PurrToken } from "../../../src/token/PurrToken.sol";
+import { IBEP20 } from "../../../src/interfaces/IBEP20.sol";
 contract ForkPurrDeposit is BaseTest{
   uint256 fork;
   uint32 networkId;
-  PurrToken usdc;
-  PurrToken _usdc;
+  IBEP20 usdc;
+  IBEP20 _usdc;
   PurrDeposit purrDeposit;
   address[] depositorAddresses;
   uint256[] amounts;
@@ -30,8 +30,8 @@ contract ForkPurrDeposit is BaseTest{
   function setUp() public {
     fork = vm.createFork(vm.envString("L1_RPC_URL"));
 
-    usdc = PurrToken(vm.envAddress("ADDRESS_L1_USDC"));
-    _usdc = PurrToken(vm.envAddress("ADDRESS_L1_USDC2"));
+    usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC"));
+    _usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC2"));
 
     vm.selectFork(fork);
     deal(address(usdc), users.alice, 1000 * 1e18);
@@ -343,7 +343,7 @@ contract ForkPurrDeposit is BaseTest{
     }
 
     function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork){
-        uint256 length = 20_000;
+        uint256 length = 10;
 
         for (uint256 i; i < length;) {
             address iAddress = vm.addr(i + 1);

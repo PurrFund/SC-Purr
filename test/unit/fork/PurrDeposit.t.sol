@@ -343,7 +343,7 @@ contract ForkPurrDeposit is BaseTest{
     }
 
     function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork){
-        uint256 length = 10;
+        uint256 length = 100;
 
         for (uint256 i; i < length;) {
             address iAddress = vm.addr(i + 1);

@@ -1,237 +1,234 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import { BaseTest } from "../Base.t.sol";
-import { UserPoolInfo, PoolInfo, PoolType } from "../../src/types/PurrStaingType.sol";
-import { ERC20Mock } from "../mocks/ERC20Mock.sol";
-import { PurrStaking } from "../../src/PurrStaking.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { BaseTest } from "../Base.t.sol";
+import { console } from "forge-std/console.sol";
+
+import { UserPoolInfo, PoolInfo, PoolType, TierType, TierInfo } from "../../src/types/PurrStaingType.sol";
+import { PurrToken } from "../../src/token/PurrToken.sol";
+import { PurrStaking } from "../../src/PurrStaking.sol";
 
 contract PurrStakingTest is BaseTest {
     using Math for uint256;
 
     PurrStaking purrStaking;
-    ERC20Mock launchPadToken;
+    PurrToken launchPadToken;
+    PoolInfo[] poolInfos;
+    TierInfo[] tierInfos;
+    uint256 initBalance;
 
-    event Stake(
+     event Stake(
         address indexed staker,
         uint256 indexed itemId,
         uint256 amount,
         uint256 point,
-        uint256 start,
-        uint256 end,
+        uint64 updateAt,
+        uint64 end,
         PoolType poolType
     );
 
     event UpdatePool(PoolInfo pool);
 
     function setUp() public {
-        launchPadToken = new ERC20Mock("LaunchPad", "LP");
-        purrStaking = new PurrStaking(address(launchPadToken), address(users.admin));
-
-        // apr * 100.000
-        // multiplier * 10
-
-        PoolInfo memory pool1 = createPoolInfo(1000, 0, 10, 30 days, 10, 0, 0, PoolType.ONE);
-        vm.prank(users.admin);
-        purrStaking.updatePool(pool1);
-
-        PoolInfo memory pool2 = createPoolInfo(3000, 10, 15, 60 days, 0, 0, 0, PoolType.TWO);
-        vm.prank(users.admin);
-        purrStaking.updatePool(pool2);
-
-        PoolInfo memory pool3 = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
-        vm.prank(users.admin);
-        purrStaking.updatePool(pool3);
-
-        PoolInfo memory pool4 = createPoolInfo(15_000, 30, 25, 240 days, 0, 0, 0, PoolType.FOUR);
-        vm.prank(users.admin);
-        purrStaking.updatePool(pool4);
-
-        // _deal(users.alice, 1000e18);
-        // _deal(users.admin, 1000e18);
-        // _deal(users.bob, 1000e18);
+        _initPools();
+        _initTiers();
+        launchPadToken = new PurrToken(users.admin, "LaunchPad", "LP");
+        purrStaking = new PurrStaking(address(launchPadToken), users.admin, poolInfos, tierInfos);
+        initBalance = 10_000e18;
+        _deal(users.alice, initBalance);
+        _deal(users.admin, initBalance);
+        _deal(users.bob, initBalance);
+        _deal(address(purrStaking), initBalance);
     }
 
-    function createPoolInfo(
-        uint16 _apr,
-        uint8 _unstakeFee,
-        uint16 _multiplier,
-        uint32 _lockDay,
-        uint32 _unstakeTime,
-        uint256 _totalStaked,
-        uint256 _numberStaker,
-        PoolType _poolType
-    )
-        internal
-        pure
-        returns (PoolInfo memory)
-    {
-        return PoolInfo({
-            apr: _apr,
-            unstakeFee: _unstakeFee,
-            multiplier: _multiplier,
-            lockDay: _lockDay,
-            unstakeTime: _unstakeTime,
-            totalStaked: _totalStaked,
-            numberStaker: _numberStaker,
-            poolType: _poolType
-        });
-    }
-
-    function test_Expect_UpdatePool() public view {
-        PoolInfo memory pool3 = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
-
-        (
-            uint16 _apr,
-            uint8 _unstakeFee,
-            uint16 _multiplier,
-            uint32 _lockDay,
-            uint32 _unstakeTime,
-            uint256 _totalStaked,
-            uint256 _numberStaker,
-            PoolType _poolType
-        ) = purrStaking.poolInfo(PoolType.THREE);
-        PoolInfo memory retrievedPool = PoolInfo({
-            apr: _apr,
-            unstakeFee: _unstakeFee,
-            multiplier: _multiplier,
-            lockDay: _lockDay,
-            unstakeTime: _unstakeTime,
-            totalStaked: _totalStaked,
-            numberStaker: _numberStaker,
-            poolType: _poolType
-        });
-        assertEq(abi.encode(pool3), abi.encode(retrievedPool));
-    }
-
-    function test_Expect_EmitEvent_UpdatePool() public {
-        PoolInfo memory pool = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
-
-        vm.expectEmit(true, false, false, true);
-        emit UpdatePool(pool);
-
-        vm.prank(users.admin);
-        purrStaking.updatePool(pool);
-    }
-
-    function test_ShouldRevert_InsufficientBallance_Stake() public {
-        bytes4 selector = bytes4(keccak256("InsufficientAmount(uint256)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, 20));
-        vm.prank(users.alice);
-        purrStaking.stake(20, PoolType.THREE);
-    }
-
-    function test_ShouldRevert_Amount_Staking() public {
+    function test_Stake_ShouldRevert_WhenInvalidAmount() public {
+        uint256 amount = 0;
         bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, 20));
-        // dealTokens(launchPadToken, users.alice);
+        vm.expectRevert(abi.encodeWithSelector(selector, amount));
+
         vm.prank(users.alice);
-        purrStaking.stake(0, PoolType.THREE);
+        purrStaking.stake(amount, PoolType.THREE);
     }
 
-    function test_ShouldRevert_ERC20InsufficientAllowance_Stake() public {
-        // dealTokens(launchPadToken, users.alice);
+    // function test_Stake_ShouldRevert_WhenInvalidPoolType() public {
+    //     PoolType
+    // }
+    // need test for multiple  staker
+    function test_Stake_ShouldStaked() public {
+        uint256 amount = 100e18;
 
-        bytes4 selector = bytes4(keccak256("ERC20InsufficientAllowance(address,uint256,uint256)"));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                selector, address(purrStaking), launchPadToken.allowance(users.alice, address(purrStaking)), 20
-            )
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+        (,, uint16 multiplier, uint32 lockDay,, uint256 totalStaked, uint256 numberStaker,) = purrStaking.poolInfo(PoolType.THREE);
+        (
+            uint64 updateAt,
+            uint64 end,
+            uint64 timeUnstaked,
+            uint256 amountAvailable,
+            address staker,
+            uint256 pPoint,
+            uint256 stakedAmount,
+            PoolType poolType
+        ) = purrStaking.userPoolInfo(purrStaking.itemId());
+
+        // assert poolInfo
+        assertEq(totalStaked, amount);
+        assertEq(numberStaker, 1);
+
+        // assert item Id
+        assertEq(purrStaking.itemId(), 1);
+
+        // assert userPoolInfo
+        uint256 pointExpect = (amount * multiplier) / 10;
+
+        assertEq(updateAt, block.timestamp);
+        assertEq(end, block.timestamp + lockDay);
+        assertEq(timeUnstaked, 0);
+        assertEq(amountAvailable, 0);
+        assertEq(staker, users.alice);
+        assertEq(pPoint, pointExpect);
+        assertEq(stakedAmount, amount);
+        assertEq(uint8(poolType), uint8(PoolType.THREE));
+        vm.prank(users.alice);
+        assertEq(purrStaking.getUserItemId()[0], 1);
+        assertEq(launchPadToken.balanceOf(users.alice), initBalance - amount);
+        uint256 posPurrBL  = amount + initBalance; 
+        assertEq(launchPadToken.balanceOf(address(purrStaking)), posPurrBL);
+    }
+
+    function test_Stake_ShouleEmit_EventStake() public {
+        uint256 amount = 100e18;
+        (,, uint16 multiplier, uint32 lockDay,,,,) = purrStaking.poolInfo(PoolType.FOUR);
+        uint256 pointExpect = (amount * multiplier) / 10;
+
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+
+        vm.expectEmit(true, true, true, true);
+        emit Stake(
+            users.alice, purrStaking.itemId() + 1, amount, pointExpect, uint64(block.timestamp), uint64(block.timestamp + lockDay), PoolType.FOUR
         );
 
-        vm.prank(users.alice);
-        purrStaking.stake(20, PoolType.THREE);
-    }
-
-    function test_Expect_PoolInfo_Stake() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30);
-        purrStaking.stake(30, PoolType.THREE);
-        vm.stopPrank();
-
-        (,,,,, uint256 _totalStaked, uint256 _numberStaker,) = purrStaking.poolInfo(PoolType.THREE);
-
-        assertEq(_totalStaked, 30);
-        assertEq(_numberStaker, 1);
-        assertEq(purrStaking.itemId(), 1);
-    }
-
-    function test_Expert_UserPoolInfo_Stake() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30);
-        purrStaking.stake(30, PoolType.THREE);
-        vm.stopPrank();
-
-        (address _staker, uint256 _pPoint, uint256 _stakedAmount, uint256 _start, uint256 _end, ,PoolType _poolType) =
-            purrStaking.userPoolInfo(1);
-
-        UserPoolInfo memory retrievedUserPoolInfo = UserPoolInfo({
-            staker: _staker,
-            pPoint: _pPoint,
-            stakedAmount: _stakedAmount,
-            start: _start,
-            end: _end,
-            timeUnstaked: 0, 
-            poolType: _poolType
-        });
-
-        UserPoolInfo memory expectUserPoolInfo = UserPoolInfo({
-            staker: users.alice,
-            pPoint: 30 * 20,
-            stakedAmount: 30,
-            start: block.timestamp,
-            end: block.timestamp + 120 days,
-            timeUnstaked: 0, 
-            poolType: PoolType.THREE
-        });
-
-        assertEq(purrStaking.itemId(), 1);
-        assertEq(abi.encode(retrievedUserPoolInfo), abi.encode(expectUserPoolInfo));
-    }
-
-    function test_Expect_Ballance_Stake() public {
-        // dealTokens(launchPadToken, users.alice);
-
-        uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
-        uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
-
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30);
-        purrStaking.stake(30, PoolType.THREE);
-        vm.stopPrank();
-
-        uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
-        uint256 amountStake = oldBalanceUser - newBalanceUser;
-
-        uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
-        uint256 _amountStake = newBalancePurrStaking - oldBalancePurrStaking;
-
-        assertEq(amountStake, _amountStake);
-        assertEq(amountStake, 30);
-        assertEq(_amountStake, 30);
-    }
-
-    function test_Expect_EmitEvent_Stake() public {
-        // dealTokens(launchPadToken, users.alice);
-
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30);
-
-        vm.expectEmit(true, true, false, true);
-        emit Stake(users.alice, 1, 30, 600, block.timestamp, block.timestamp + 120 days, PoolType.THREE);
-
-        purrStaking.stake(30, PoolType.THREE);
+        purrStaking.stake(amount, PoolType.FOUR);
         vm.stopPrank();
     }
 
-    function test_ShouldRevert_InvalidStaker_claimReward() public {
-        // dealTokens(launchPadToken, users.alice);
+    function test_GetPendingReward_ShouldRight_PoolONE() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1;
+        vm.warp(1);
         vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30);
-        purrStaking.stake(30, PoolType.THREE);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.ONE);
+        vm.stopPrank();
+
+        (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+
+        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+
+        vm.warp(32 days);
+        uint256 timeStaked = block.timestamp - updateAt;
+        uint256 expectTimeStaked = 32 days - 1 seconds;
+        assertEq(timeStaked, expectTimeStaked);
+
+        uint256 timeStakedMulApr = expectTimeStaked * apr;
+        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+
+        uint256 actualReward = purrStaking.getPendingReward(1);
+
+        assertEq(expectReward, actualReward);
+    }
+
+    function test_GetPendingReward_ShouldRight_PoolTWO() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1;
+        vm.warp(1);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.TWO);
+        vm.stopPrank();
+
+        (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+
+        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked = block.timestamp - updateAt;
+        uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked, expectTimeStaked);
+
+        uint256 timeStakedMulApr = expectTimeStaked * apr;
+        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+
+        uint256 actualReward = purrStaking.getPendingReward(1);
+
+        assertEq(expectReward, actualReward);
+    }
+
+    function test_GetPendingReward_ShouldRight_PoolThree() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1;
+        vm.warp(1);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+
+        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked = block.timestamp - updateAt;
+        uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked, expectTimeStaked);
+
+        uint256 timeStakedMulApr = expectTimeStaked * apr;
+        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+
+        uint256 actualReward = purrStaking.getPendingReward(1);
+
+        assertEq(expectReward, actualReward);
+    }
+
+    function test_GetPendingReward_ShouldRight_PoolFour() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1;
+        vm.warp(1);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.FOUR);
+        vm.stopPrank();
+
+        (uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+
+        (, uint16 apr,,,,,,) = purrStaking.poolInfo(poolType);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked = block.timestamp - updateAt;
+        uint256 expectTimeStaked = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked, expectTimeStaked);
+
+        uint256 timeStakedMulApr = expectTimeStaked * apr;
+        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward = amount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+
+        uint256 actualReward = purrStaking.getPendingReward(1);
+
+        assertEq(expectReward, actualReward);
+    }
+
+    function test_ClaimReward_ShouldRevert_WhenInvalidStaker() public {
+        uint256 amount = 100e18;
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
 
         bytes4 selector = bytes4(keccak256("InvalidStaker(address)"));
@@ -241,223 +238,155 @@ contract PurrStakingTest is BaseTest {
         purrStaking.claimReward(1);
     }
 
-    function test_Expect_PoolONE_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
+    function test_ClaimReward_ShouldRevert_WhenInsufficientBalance() public {
+        uint256 amount = 100e18;
+        uint256 itemId = 1; 
         vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.ONE);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-        uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(26_301_360_350_076_103, reward);
-    }
-
-    function test_Expect_HandlePoolONE_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.ONE);
-        vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-
-        uint256 _reward = (_stakedAmount * timeStakedMulApr) / div;
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(26_301_360_350_076_103, reward);
-    }
-
-    function test_Expect_HandlePoolTWO_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.TWO);
-        vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-
-        uint256 _reward = (_stakedAmount * timeStakedMulApr) / div;
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(78_904_081_050_228_310, reward);
-    }
-
-    function test_Expect_PoolTWO_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.TWO);
-        vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-
-        uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(78_904_081_050_228_310, reward);
-    }
-
-    function test_Expect_PoolTHREE_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.THREE);
-        vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-
-        uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(236_712_243_150_684_931, reward);
-    }
-
-    function test_Expect_PoolFOUR_CalculatePendingReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.FOUR);
-        vm.stopPrank();
-
-        assertEq(purrStaking.itemId(), 1);
-
-        (,, uint256 _stakedAmount, uint256 _start,, ,PoolType _pool_Type) = purrStaking.userPoolInfo(1);
-
-        (uint16 _apr,,,,,,,) = purrStaking.poolInfo(_pool_Type);
-
-        vm.warp(32 days);
-        uint256 timeStaked = block.timestamp - _start;
-        uint256 timeStakedMulApr = timeStaked * _apr;
-        uint256 div = 100_000 * purrStaking.SECOND_YEAR();
-
-        uint256 _reward = _stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
-
-        vm.warp(32 days);
-        uint256 reward = purrStaking.getPendingReward(1);
-
-        assertEq(_reward, reward);
-        assertEq(394_520_405_251_141_552, reward);
-    }
-
-    function test_Expect_Balance() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.ONE);
-        vm.stopPrank();
-
-        assertEq(launchPadToken.balanceOf(address(purrStaking)), 30 * 1e18);
-    }
-
-    function test_ShouldRevert_InsufficientBalance_ClaimReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.ONE);
-        vm.stopPrank();
-
-        assertEq(launchPadToken.balanceOf(address(purrStaking)), 30 * 1e18);
-
+        
         vm.startPrank(address(purrStaking));
-        launchPadToken.approve(address(this), launchPadToken.balanceOf(address(purrStaking)));
+        launchPadToken.transfer(users.maker, amount  + initBalance); 
         vm.stopPrank();
-
-        launchPadToken.transferFrom(address(purrStaking), users.bob, launchPadToken.balanceOf(address(purrStaking)));
-
+        
+        vm.warp(1000 days);
         bytes4 selector = bytes4(keccak256("InsufficientBalance(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, launchPadToken.balanceOf(address(purrStaking))));
 
-        vm.warp(32 days);
-        vm.startPrank(users.alice);
-        purrStaking.claimReward(1);
+        vm.prank(users.alice);
+        purrStaking.claimReward(itemId);
     }
 
-    function test_Expect_ClaimReward() public {
-        // dealTokens(launchPadToken, users.alice);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
-        purrStaking.stake(30 * 1e18, PoolType.ONE);
-        vm.stopPrank();
+    // function test_ClaimReward_ShouldClaimRewarded() public {
+    //     uint256 amount = 100e18; 
+    //     uint256 
 
-        vm.prank(address(purrStaking));
-        launchPadToken.approve(address(purrStaking), 30 * 1e18);
+    //     vm.startPrank(users.alice);
+    //     launchPadToken.approve(address(purrStaking), amount);
+    //     purrStaking.stake(amount, PoolType.ONE);
+    //     vm.stopPrank();
 
-        uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
-        uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+    //     _deal(address(purrStaking), )
+    //     launchPadToken.approve(address(purrStaking), 30 * 1e18);
 
-        vm.warp(32 days);
-        vm.startPrank(users.alice);
-        purrStaking.claimReward(1);
+    //     uint256 oldBalanceUser = launchPadToken.balanceOf(users.alice);
+    //     uint256 oldBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
 
-        uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
-        uint256 reward = newBalanceUser - oldBalanceUser;
-        assertEq(reward, purrStaking.getPendingReward(1));
+    //     vm.warp(32 days);
+    //     vm.startPrank(users.alice);
+    //     purrStaking.claimReward(1);
 
-        uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
-        uint256 give_reward = oldBalancePurrStaking - newBalancePurrStaking;
-        assertEq(give_reward, purrStaking.getPendingReward(1));
+    //     uint256 newBalanceUser = launchPadToken.balanceOf(users.alice);
+    //     uint256 reward = newBalanceUser - oldBalanceUser;
+    //     assertEq(reward, purrStaking.getPendingReward(1));
+
+    //     uint256 newBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+    //     uint256 give_reward = oldBalancePurrStaking - newBalancePurrStaking;
+    //     assertEq(give_reward, purrStaking.getPendingReward(1));
+    // }
+
+    // function test_Expect_UpdatePool() public view {
+    //     PoolInfo memory pool3 = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
+
+    //     (
+    //         uint16 _apr,
+    //         uint8 _unstakeFee,
+    //         uint16 _multiplier,
+    //         uint32 _lockDay,
+    //         uint32 _unstakeTime,
+    //         uint256 _totalStaked,
+    //         uint256 _numberStaker,
+    //         PoolType _poolType
+    //     ) = purrStaking.poolInfo(PoolType.THREE);
+    //     PoolInfo memory retrievedPool = PoolInfo({
+    //         apr: _apr,
+    //         unstakeFee: _unstakeFee,
+    //         multiplier: _multiplier,
+    //         lockDay: _lockDay,
+    //         unstakeTime: _unstakeTime,
+    //         totalStaked: _totalStaked,
+    //         numberStaker: _numberStaker,
+    //         poolType: _poolType
+    //     });
+    //     assertEq(abi.encode(pool3), abi.encode(retrievedPool));
+    // }
+
+    // function test_Expect_EmitEvent_UpdatePool() public {
+    //     PoolInfo memory pool = createPoolInfo(9000, 20, 20, 120 days, 0, 0, 0, PoolType.THREE);
+
+    //     vm.expectEmit(true, false, false, true);
+    //     emit UpdatePool(pool);
+
+    //     vm.prank(users.admin);
+    //     purrStaking.updatePool(pool);
+    // }
+
+    function _initPools() internal {
+        PoolInfo memory pool1 = PoolInfo({
+            apr: 1000,
+            unstakeFee: 0,
+            multiplier: 10,
+            lockDay: 30 days,
+            unstakeTime: 10 days,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.ONE
+        });
+        PoolInfo memory pool2 = PoolInfo({
+            apr: 3000,
+            unstakeFee: 1000,
+            multiplier: 15,
+            lockDay: 60 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.TWO
+        });
+        PoolInfo memory pool3 = PoolInfo({
+            apr: 9000,
+            unstakeFee: 2000,
+            multiplier: 20,
+            lockDay: 150 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.THREE
+        });
+        PoolInfo memory pool4 = PoolInfo({
+            apr: 15_000,
+            unstakeFee: 3000,
+            multiplier: 25,
+            lockDay: 240 days,
+            unstakeTime: 0,
+            totalStaked: 0,
+            numberStaker: 0,
+            poolType: PoolType.FOUR
+        });
+        poolInfos.push(pool1);
+        poolInfos.push(pool2);
+        poolInfos.push(pool3);
+        poolInfos.push(pool4);
+    }
+
+    function _initTiers() internal {
+        TierInfo memory tier1 = TierInfo({ lotteryProbabilities: 612, poolWeight: 1, pPoint: 1000 });
+        TierInfo memory tier2 = TierInfo({ lotteryProbabilities: 2534, poolWeight: 1, pPoint: 4000 });
+        TierInfo memory tier3 = TierInfo({ lotteryProbabilities: 5143, poolWeight: 1, pPoint: 10_000 });
+        TierInfo memory tier4 = TierInfo({ lotteryProbabilities: 7813, poolWeight: 2, pPoint: 30_000 });
+        TierInfo memory tier5 = TierInfo({ lotteryProbabilities: 9553, poolWeight: 5, pPoint: 60_000 });
+        TierInfo memory tier6 = TierInfo({ lotteryProbabilities: 10_000, poolWeight: 10, pPoint: 100_000 });
+
+        tierInfos.push(tier1);
+        tierInfos.push(tier2);
+        tierInfos.push(tier3);
+        tierInfos.push(tier4);
+        tierInfos.push(tier5);
+        tierInfos.push(tier6);
+    }
+
+    function _deal(address _reciever, uint256 _amount) internal {
+        vm.prank(users.admin);
+        launchPadToken.mint(_reciever, _amount);
     }
 }

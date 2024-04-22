@@ -16,20 +16,21 @@ struct UserPoolInfo {
 }
 
 struct TierInfo {
-    // multiple * 1000
-    // example : 6.12% => 6120
+    // multiple * 100
+    // example : 6.12% => 612
     uint16 lotteryProbabilities;
     uint16 poolWeight;
     uint256 pPoint;
+    TierType tierType;
 }
 
 struct PoolInfo {
-    // multiple * 1000
-    // example: 20% => 2000
+    // multiple * 100
+    // example: 9% => 900
     uint16 unstakeFee;
-    // multiple * 1000
-    // example: 15.55% => 1555, 1% => 1000
-    uint16 apr;
+    // multiple * 100
+    // example: 15.55% => 1555, 1% => 100
+    uint16 apy;
     // multiple * 10
     // example: 1.5 => 15
     uint16 multiplier;

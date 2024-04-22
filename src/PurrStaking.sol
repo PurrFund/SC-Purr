@@ -120,7 +120,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         PoolType poolType = userPool.poolType;
         PoolInfo storage pool = poolInfo[poolType];
 
-        if (_amount <= 0 || _amount >= userPool.stakedAmount) {
+        if (_amount <= 0 || _amount > userPool.stakedAmount) {
             revert InvalidAmount(_amount);
         }
 
@@ -193,8 +193,8 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     }
 
     // update start time
-    function claimReward(uint256 _itemId) external nonReentrant{
-        address sender = msg.sender; 
+    function claimReward(uint256 _itemId) external nonReentrant {
+        address sender = msg.sender;
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
 
         if (sender != userPool.staker) {
@@ -209,8 +209,8 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         userPoolInfo[_itemId].updateAt = uint64(block.timestamp);
 
         PurrToken(launchPadToken).safeTransfer(sender, reward);
-        
-        emit ClaimReward(sender,  reward, uint64(block.timestamp));
+
+        emit ClaimReward(sender, reward, uint64(block.timestamp));
     }
 
     function updatePool(PoolInfo memory _pool) external onlyOwner {
@@ -219,13 +219,13 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         emit UpdatePool(_pool);
     }
 
-    function updateTier(TierType _tierType, TierInfo memory tier) external onlyOwner {
-        tierInfo[_tierType] = tier;
+    function updateTier(TierInfo memory tier) external onlyOwner {
+        tierInfo[tier.tierType] = tier;
 
-        emit UpdateTier(_tierType, tier);
+        emit UpdateTier(tier);
     }
 
-    // how to calculate AVG APR
+    // how to calculate AVG APY
     // how to caculate reward
     function getTotalStakedPool() external view returns (uint256, uint256, uint256, uint256) {
         PoolInfo memory poolOne = poolInfo[PoolType.ONE];
@@ -236,9 +236,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         uint256 totalStaked = poolOne.totalStaked + poolTwo.totalStaked + poolThree.totalStaked + poolFour.totalStaked;
         uint256 totalNumberStaker = poolOne.numberStaker + poolTwo.numberStaker + poolThree.numberStaker + poolFour.numberStaker;
         uint256 totalReward = 0;
-        uint256 avgAPR = 0;
+        uint256 avgAPY = 0;
 
-        return (totalStaked, totalNumberStaker, totalReward, avgAPR);
+        return (totalStaked, totalNumberStaker, totalReward, avgAPY);
     }
 
     function getUserTotalStaked() external view returns (uint256, uint256) {
@@ -263,12 +263,20 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         return userItemInfo[msg.sender];
     }
 
+    function emergencyWithdraw(uint256 _amount) external onlyOwner {
+        if (launchPadToken.balanceOf(address(this)) < _amount) {
+            revert InsufficientBalance(launchPadToken.balanceOf(address(this)));
+        }
+
+        PurrToken(launchPadToken).safeTransfer(msg.sender, _amount);
+    }
+
     function _calculatePendingReward(UserPoolInfo memory userPool) internal view returns (uint256) {
         PoolInfo memory pool = poolInfo[userPool.poolType];
         uint256 timeStaked = block.timestamp - userPool.updateAt;
-        uint256 timeStakedMulApr = timeStaked * pool.apr;
-        uint256 div = 100_000 * SECOND_YEAR;
+        uint256 timeStakedMulApy = timeStaked * pool.apy;
+        uint256 div = 10_000 * SECOND_YEAR;
 
-        return userPool.stakedAmount.mulDiv(timeStakedMulApr, div, Math.Rounding.Floor);
+        return userPool.stakedAmount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
     }
 }

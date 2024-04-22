@@ -17,7 +17,7 @@ contract IPurrStaking {
     event UnStake(address indexed staker, uint256 amount, uint256 point, uint64 time, PoolType pool);
     event ClaimReward(address indexed claimer, uint256 amount, uint64 claimAt);
     event UpdatePool(PoolInfo pool);
-    event UpdateTier(TierType _tierType, TierInfo tier);
+    event UpdateTier(TierInfo tier);
 
     // error list
     error InsufficientAmount(uint256 amount);

@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import { BaseScript } from "./Base.s.sol";
 import { PurrLaunchPad } from "../src/PurrLaunchPad.sol";
-import { LaunchPool, LaunchPad, PreProject, VestingType } from "../src/types/LaunchPadType.sol";
+import { LaunchPool, LaunchPad, PreProject, VestingType } from "../src/types/PurrLaunchPadType.sol";
 import { ERC20Mock } from "../test/mocks/ERC20Mock.sol";
 
 contract DeployPurrLaunchPadScript is BaseScript {

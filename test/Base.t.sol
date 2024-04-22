@@ -37,6 +37,10 @@ abstract contract BaseTest is Test {
         return user;
     }
 
+    function dealTokens(MockUSD _usdc, address _to) internal {
+        deal({ token: address(_usdc), to: _to, give: 1000 * 1e18 });
+    }
+
     function dealTokens() internal {
         deal({ token: address(usd), to: users.admin, give: 1_000_000e18 });
         deal({ token: address(usd), to: users.alice, give: 1_000_000e18 });

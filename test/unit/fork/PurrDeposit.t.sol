@@ -342,8 +342,8 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
 
-    /*function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork){
-        uint256 length = 100;
+    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork){
+        uint256 length = 20_000;
 
         for (uint256 i; i < length;) {
             address iAddress = vm.addr(i + 1);
@@ -366,7 +366,7 @@ contract ForkPurrDeposit is BaseTest{
         for (uint256 i; i < depositLength; ++i) {
             assertEq(purrDeposit.depositorInfo(depositorAddresses[i]), amounts[i]);
         }
-    }*/
+    }
 
     function test_TurnOffWithDraw_ShouldRevert_NotSubAdmin() public setFork(fork){
         bytes4 selector = bytes4(keccak256("InvalidSubAdmin(address)"));

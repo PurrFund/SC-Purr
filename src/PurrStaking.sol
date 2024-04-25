@@ -95,9 +95,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         });
 
         // add item to user's list itemId
-        uint256 length = userItemInfo[sender].length; 
+        uint256 length = userItemInfo[sender].length;
         userItemInfo[sender].push(itemId);
-        itemIdIndexInfo[itemId] = length; 
+        itemIdIndexInfo[itemId] = length;
 
         PurrToken(launchPadToken).safeTransferFrom(sender, address(this), _amount);
 
@@ -138,32 +138,33 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         uint16 unstakeFee = pool.unstakeFee;
         uint64 end = userPool.end;
         uint256 reward = _calculatePendingReward(userPool);
-        // update userPool infor 
+
+        // update userPool infor
         userPool.stakedAmount -= _amount;
         userPool.pPoint = userPool.stakedAmount.mulDiv(pool.multiplier, 10, Math.Rounding.Floor);
         userPool.updateAt = uint64(block.timestamp);
 
         // update poolInfo
-        pool.totalStaked-= _amount;
-        if(userPool.stakedAmount == 0) {
-            pool.numberStaker-=1; 
-        }   
+        pool.totalStaked -= _amount;
+        if (userPool.stakedAmount == 0) {
+            pool.numberStaker -= 1;
+        }
 
         uint256 totalWithDraw = _amount + reward;
 
         if (poolType == PoolType.ONE) {
             if (uint64(block.timestamp) > end) {
                 PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
-                   delete userPoolInfo[_itemId];
-                   delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
-                   delete itemIdIndexInfo[itemId]; 
+                if (userPool.stakedAmount == 0) {
+                    delete userPoolInfo[_itemId];
+                    delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
+                    delete itemIdIndexInfo[itemId];
+                }
             } else if (uint64(block.timestamp) <= end) {
                 userPool.timeUnstaked = uint64(block.timestamp) + pool.unstakeTime;
                 userPool.amountAvailable = _amount;
             }
-           
         } else if (poolType == PoolType.TWO || poolType == PoolType.THREE || poolType == PoolType.FOUR) {
-
             if (uint64(block.timestamp) > end) {
                 PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
             } else if (uint64(block.timestamp) <= end) {
@@ -171,12 +172,11 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
                 PurrToken(launchPadToken).safeTransfer(sender, remainAmount);
                 PurrToken(launchPadToken).burn(totalWithDraw - remainAmount);
             }
-        }
-
-        if (userPool.stakedAmount == 0 && poolType != PoolType.ONE) {
-            delete userPoolInfo[_itemId];
-            delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
-            delete itemIdIndexInfo[itemId]; 
+            if (userPool.stakedAmount == 0) {
+                delete userPoolInfo[_itemId];
+                delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
+                delete itemIdIndexInfo[itemId];
+            }
         }
 
         emit UnStake(sender, _amount, userPool.pPoint, uint64(block.timestamp), poolType);
@@ -188,9 +188,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
 
         if (_itemId <= 0) {
             revert InvalidItemId(_itemId);
-        }   
+        }
 
-        if(block.timestamp < userPool.timeUnstaked) {
+        if (block.timestamp < userPool.timeUnstaked) {
             revert CanNotWithClaimPoolOne();
         }
 
@@ -209,7 +209,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         if (userPool.stakedAmount == 0) {
             delete userPoolInfo[_itemId];
             delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
-            delete itemIdIndexInfo[itemId]; 
+            delete itemIdIndexInfo[itemId];
         }
     }
 

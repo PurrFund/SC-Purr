@@ -29,4 +29,5 @@ contract IPurrStaking {
     error InsufficientBalance(uint256 amount);
     error InvalidPoolType();
     error InvalidItemId(uint256 itemId);
+    error CanNotWithClaimPoolOne(); 
 }

@@ -4,9 +4,9 @@ pragma solidity ^0.8.20;
 struct UserPoolInfo {
     uint64 updateAt;
     uint64 end;
-    // use when poolType is ONE
+    // for poolType is ONE
     uint64 timeUnstaked;
-    // user when poolType is ONE
+    // for poolType is ONE
     uint256 amountAvailable;
     address staker;
     // multiple * 10e18

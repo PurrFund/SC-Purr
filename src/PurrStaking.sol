@@ -28,6 +28,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     mapping(uint256 itemId => UserPoolInfo userPool) public userPoolInfo;
     mapping(address staker => uint256[] itemIds) public userItemInfo;
     mapping(TierType tierType => TierInfo tier) public tierInfo;
+    mapping(uint256 itemId => uint256 index) itemIdIndexInfo;
 
     constructor(
         address _launchPadToken,
@@ -94,7 +95,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         });
 
         // add item to user's list itemId
+        uint256 length = userItemInfo[sender].length; 
         userItemInfo[sender].push(itemId);
+        itemIdIndexInfo[itemId] = length; 
 
         PurrToken(launchPadToken).safeTransferFrom(sender, address(this), _amount);
 
@@ -135,19 +138,35 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         uint16 unstakeFee = pool.unstakeFee;
         uint64 end = userPool.end;
         uint256 reward = _calculatePendingReward(userPool);
+        // update userPool infor 
         userPool.stakedAmount -= _amount;
         userPool.pPoint = userPool.stakedAmount.mulDiv(pool.multiplier, 10, Math.Rounding.Floor);
         userPool.updateAt = uint64(block.timestamp);
 
+        // update poolInfo
+        pool.totalStaked-= _amount;
+        if(userPool.stakedAmount == 0) {
+            pool.numberStaker-=1; 
+        }   
+
+        uint256 totalWithDraw = _amount + reward;
+
         if (poolType == PoolType.ONE) {
-            userPool.timeUnstaked = uint64(block.timestamp) + pool.unstakeTime;
-            userPool.amountAvailable = _amount;
+            if (uint64(block.timestamp) > end) {
+                PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
+                   delete userPoolInfo[_itemId];
+                   delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
+                   delete itemIdIndexInfo[itemId]; 
+            } else if (uint64(block.timestamp) <= end) {
+                userPool.timeUnstaked = uint64(block.timestamp) + pool.unstakeTime;
+                userPool.amountAvailable = _amount;
+            }
+           
         } else if (poolType == PoolType.TWO || poolType == PoolType.THREE || poolType == PoolType.FOUR) {
-            uint256 totalWithDraw = _amount + reward;
 
             if (uint64(block.timestamp) > end) {
                 PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
-            } else if (uint64(block.timestamp) < end) {
+            } else if (uint64(block.timestamp) <= end) {
                 uint256 remainAmount = totalWithDraw.mulDiv(unstakeFee, 10_000, Math.Rounding.Floor);
                 PurrToken(launchPadToken).safeTransfer(sender, remainAmount);
                 PurrToken(launchPadToken).burn(totalWithDraw - remainAmount);
@@ -156,7 +175,8 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
 
         if (userPool.stakedAmount == 0 && poolType != PoolType.ONE) {
             delete userPoolInfo[_itemId];
-            delete userItemInfo[msg.sender][_itemId];
+            delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
+            delete itemIdIndexInfo[itemId]; 
         }
 
         emit UnStake(sender, _amount, userPool.pPoint, uint64(block.timestamp), poolType);
@@ -168,6 +188,10 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
 
         if (_itemId <= 0) {
             revert InvalidItemId(_itemId);
+        }   
+
+        if(block.timestamp < userPool.timeUnstaked) {
+            revert CanNotWithClaimPoolOne();
         }
 
         if (userPool.poolType != PoolType.ONE) {
@@ -177,13 +201,15 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         if (sender != userPool.staker) {
             revert InvalidStaker(msg.sender);
         }
+
         PurrToken(launchPadToken).safeTransfer(msg.sender, userPool.amountAvailable);
 
         userPool.amountAvailable = 0;
 
         if (userPool.stakedAmount == 0) {
             delete userPoolInfo[_itemId];
-            delete userItemInfo[msg.sender][_itemId];
+            delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
+            delete itemIdIndexInfo[itemId]; 
         }
     }
 

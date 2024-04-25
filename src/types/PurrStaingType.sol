@@ -26,7 +26,7 @@ struct TierInfo {
 
 struct PoolInfo {
     // multiple * 100
-    // example: 9% => 900
+    // example: 10% => 1000
     uint16 unstakeFee;
     // multiple * 100
     // example: 15.55% => 1555, 1% => 100

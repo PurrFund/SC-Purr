@@ -28,7 +28,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     mapping(uint256 itemId => UserPoolInfo userPool) public userPoolInfo;
     mapping(address staker => uint256[] itemIds) public userItemInfo;
     mapping(TierType tierType => TierInfo tier) public tierInfo;
-    mapping(uint256 itemId => uint256 index) itemIdIndexInfo;
+    mapping(uint256 itemId => uint256 index) public itemIdIndexInfo;
 
     constructor(
         address _launchPadToken,
@@ -168,9 +168,10 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
             if (uint64(block.timestamp) > end) {
                 PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
             } else if (uint64(block.timestamp) <= end) {
-                uint256 remainAmount = totalWithDraw.mulDiv(unstakeFee, 10_000, Math.Rounding.Floor);
+                uint256 burnAmount = _amount.mulDiv(unstakeFee, 10_000, Math.Rounding.Floor); 
+                uint256 remainAmount = totalWithDraw - burnAmount;
                 PurrToken(launchPadToken).safeTransfer(sender, remainAmount);
-                PurrToken(launchPadToken).burn(totalWithDraw - remainAmount);
+                PurrToken(launchPadToken).burn(burnAmount);
             }
             if (userPool.stakedAmount == 0) {
                 delete userPoolInfo[_itemId];

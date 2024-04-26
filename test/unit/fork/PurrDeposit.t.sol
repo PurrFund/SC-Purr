@@ -1,86 +1,85 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {Test, console} from "forge-std/Test.sol";
+import { Test, console } from "forge-std/Test.sol";
 import { BaseTest } from "../../Base.t.sol";
 import { PurrDeposit } from "../../../src/PurrDeposit.sol";
 import { IBEP20 } from "../../../src/interfaces/IBEP20.sol";
-contract ForkPurrDeposit is BaseTest{
-  uint256 fork;
-  uint32 networkId;
-  IBEP20 usdc;
-  IBEP20 _usdc;
-  PurrDeposit purrDeposit;
-  address[] depositorAddresses;
-  uint256[] amounts;
 
-  modifier setFork (uint256 _fork){
-    vm.selectFork(_fork);
-    _;
-  }
+contract ForkPurrDeposit is BaseTest {
+    uint256 fork;
+    uint32 networkId;
+    IBEP20 usdc;
+    IBEP20 _usdc;
+    PurrDeposit purrDeposit;
+    address[] depositorAddresses;
+    uint256[] amounts;
 
-  event Deposit(address indexed receiver, uint256 amount, uint256 timeDeposit);
-  event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
-  event UpdatePoolDeposit(bool canWithDraw);
-  event WithDrawUser(address indexed sender, uint256 amount, uint256 timeWithDraw);
-  event UpdateBalanceDepositor();
-  event SetUsd(address usd);
-  event AddFund(address indexed admin, address indexed receiver, uint256 amount);
+    modifier setFork(uint256 _fork) {
+        vm.selectFork(_fork);
+        _;
+    }
 
-  function setUp() public {
-    fork = vm.createFork(vm.envString("L1_RPC_URL"));
+    event Deposit(address indexed receiver, uint256 amount, uint256 timeDeposit);
+    event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
+    event UpdatePoolDeposit(bool canWithDraw);
+    event WithDrawUser(address indexed sender, uint256 amount, uint256 timeWithDraw);
+    event UpdateBalanceDepositor();
+    event SetUsd(address usd);
+    event AddFund(address indexed admin, address indexed receiver, uint256 amount);
 
-    usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC"));
-    _usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC2"));
+    function setUp() public {
+        fork = vm.createFork(vm.envString("L1_RPC_URL"));
 
-    vm.selectFork(fork);
-    deal(address(usdc), users.alice, 1000 * 1e18);
-    deal(address(usdc), users.admin, 1000 * 1e18);
+        usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC"));
+        _usdc = IBEP20(vm.envAddress("ADDRESS_L1_USDC2"));
 
-    vm.startPrank(users.admin);
-    vm.selectFork(fork);
-    purrDeposit = new PurrDeposit(users.admin, address(usdc), users.rootAdmin, users.subAdmin);
-    vm.stopPrank();
-  }
+        vm.selectFork(fork);
+        deal(address(usdc), users.alice, 1000 * 1e18);
+        deal(address(usdc), users.admin, 1000 * 1e18);
 
-  function test_Deploy_ShouldRight_InitialOwner() public setFork(fork){
-    assertEq(users.admin, purrDeposit.owner());
-  }
+        vm.startPrank(users.admin);
+        vm.selectFork(fork);
+        purrDeposit = new PurrDeposit(users.admin, address(usdc), users.rootAdmin, users.subAdmin);
+        vm.stopPrank();
+    }
 
-  function test_Deploy_ShouldRight_RootAdmin() public setFork(fork){
-      assertEq(users.rootAdmin, purrDeposit.rootAdmin());
-  }
+    function test_Deploy_ShouldRight_InitialOwner() public setFork(fork) {
+        assertEq(users.admin, purrDeposit.owner());
+    }
 
-  function test_Deploy_ShouldRight_SubAdmin() public setFork(fork){
-      assertEq(users.subAdmin, purrDeposit.subAdmin());
-  }
+    function test_Deploy_ShouldRight_RootAdmin() public setFork(fork) {
+        assertEq(users.rootAdmin, purrDeposit.rootAdmin());
+    }
 
-  function test_Deploy_ShouldRight_CanWithDraw() public setFork(fork){
-      assertEq(true, purrDeposit.canWithDraw());
-  }
+    function test_Deploy_ShouldRight_SubAdmin() public setFork(fork) {
+        assertEq(users.subAdmin, purrDeposit.subAdmin());
+    }
 
-  function test_Deploy_ShouldRight_Usd() public setFork(fork){
-      assertEq(address(usdc), address(purrDeposit.usd()));
-  }
+    function test_Deploy_ShouldRight_CanWithDraw() public setFork(fork) {
+        assertEq(true, purrDeposit.canWithDraw());
+    }
 
-  function test_Deposit_ShouldRevert_WhenInvalidAmount() public setFork(fork){
-      bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
-      vm.expectRevert(abi.encodeWithSelector(selector, 0));
+    function test_Deploy_ShouldRight_Usd() public setFork(fork) {
+        assertEq(address(usdc), address(purrDeposit.usd()));
+    }
 
-      vm.prank(users.alice);
-      purrDeposit.deposit(0);
-  } 
+    function test_Deposit_ShouldRevert_WhenInvalidAmount() public setFork(fork) {
+        bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 0));
 
-  function test_Deposit_ShouldRevert_WhenInsufficientAllowance() public setFork(fork){
-      vm.expectRevert("BEP20: transfer amount exceeds allowance");
+        vm.prank(users.alice);
+        purrDeposit.deposit(0);
+    }
 
-      vm.prank(users.alice);
-      purrDeposit.deposit(20);
-  }
+    function test_Deposit_ShouldRevert_WhenInsufficientAllowance() public setFork(fork) {
+        vm.expectRevert("BEP20: transfer amount exceeds allowance");
 
-  
+        vm.prank(users.alice);
+        purrDeposit.deposit(20);
+    }
 
-  function test_Deposit_ShouldDeposited() public setFork(fork){
+    function test_Deposit_ShouldDeposited() public setFork(fork) {
         uint256 prePurrBL = usdc.balanceOf(address(purrDeposit));
         uint256 preAliceBL = usdc.balanceOf(users.alice);
         uint256 preAliceBLPurr = purrDeposit.depositorInfo(users.alice);
@@ -100,7 +99,7 @@ contract ForkPurrDeposit is BaseTest{
         assertEq(preAliceBLPurr + amountDeposit, posAliceBLPurr);
     }
 
-    function test_Deposit_ShouldEmit_EventDeposit() public setFork(fork){
+    function test_Deposit_ShouldEmit_EventDeposit() public setFork(fork) {
         uint256 amountDeposit = 10e18;
         vm.prank(users.alice);
         usdc.approve(address(purrDeposit), amountDeposit);
@@ -112,7 +111,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.deposit(amountDeposit);
     }
 
-    function test_AddFund_ShouldRevert_WhenInvalidAmount() public setFork(fork){
+    function test_AddFund_ShouldRevert_WhenInvalidAmount() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, 0));
 
@@ -120,7 +119,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.deposit(0);
     }
 
-    function test_AddFund_ShouldAddFunded() public setFork(fork){
+    function test_AddFund_ShouldAddFunded() public setFork(fork) {
         uint256 amount = 100e18;
         uint256 prePurrDepositBL = usdc.balanceOf(address(purrDeposit));
         uint256 preAliceBL = usdc.balanceOf(users.alice);
@@ -137,7 +136,7 @@ contract ForkPurrDeposit is BaseTest{
         assertEq(preAliceBL - amount, posAliceBL);
     }
 
-    function test_AddFund_ShouldEmit_EventAddFund() public setFork(fork){
+    function test_AddFund_ShouldEmit_EventAddFund() public setFork(fork) {
         uint256 amount = 100e18;
 
         vm.prank(users.alice);
@@ -150,7 +149,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.addFund(amount);
     }
 
-    function test_WithDrawRootAdmin_ShouldRevert_WhenNotRootAdmin() public setFork(fork){
+    function test_WithDrawRootAdmin_ShouldRevert_WhenNotRootAdmin() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidRootAdmin(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
@@ -158,7 +157,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawRootAdmin(0);
     }
 
-    function test_WithDrawRootAdmin_ShouldRevert_WhenInvalidAmount() public setFork(fork){
+    function test_WithDrawRootAdmin_ShouldRevert_WhenInvalidAmount() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, 0));
 
@@ -166,7 +165,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawRootAdmin(0);
     }
 
-    function test_WithDrawRootAdmin_ShouldWithDrawRootAdmined() public setFork(fork){
+    function test_WithDrawRootAdmin_ShouldWithDrawRootAdmined() public setFork(fork) {
         uint256 amount = 100e18;
         uint256 withDrawAmount = 70e18;
 
@@ -189,7 +188,7 @@ contract ForkPurrDeposit is BaseTest{
         assertEq(preRootAdminBL + withDrawAmount, posRootAdminBL);
     }
 
-    function test_WithDrawRootAdmin_ShouldEmit_EventwithDrawRootAdmin() public setFork(fork){
+    function test_WithDrawRootAdmin_ShouldEmit_EventwithDrawRootAdmin() public setFork(fork) {
         uint256 amount = 100e18;
         uint256 withDrawAmount = 70e18;
 
@@ -206,7 +205,7 @@ contract ForkPurrDeposit is BaseTest{
         vm.stopPrank();
     }
 
-    function test_WithDrawUser_ShouldReVert_WhenCanNotWithDraw() public setFork(fork){
+    function test_WithDrawUser_ShouldReVert_WhenCanNotWithDraw() public setFork(fork) {
         vm.prank(users.admin);
         purrDeposit.updateStatusWithDraw(false);
 
@@ -217,7 +216,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawUser(20);
     }
 
-    function test_WithDrawUser_ShouldRevert_WhenInvalidAmount() public setFork(fork){
+    function test_WithDrawUser_ShouldRevert_WhenInvalidAmount() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidAmount(uint256)"));
         vm.expectRevert(abi.encodeWithSelector(selector, 0));
 
@@ -225,7 +224,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawUser(0);
     }
 
-    function test_WithDrawUser_ShouldRevert_WhenInsufficientTotalSupply() public setFork(fork){
+    function test_WithDrawUser_ShouldRevert_WhenInsufficientTotalSupply() public setFork(fork) {
         uint256 amountAddFund = 100e18;
         uint256 amountDeposit = 100e18;
         uint256 amountWithDraw = 220e18;
@@ -247,7 +246,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawUser(amountWithDraw);
     }
 
-    function test_WithDrawUser_ShouldRevert_WhenInsufficientBalance() public setFork(fork){
+    function test_WithDrawUser_ShouldRevert_WhenInsufficientBalance() public setFork(fork) {
         uint256 amountAddFund = 300e18;
         uint256 amountDeposit = 100e18;
         uint256 amountWithDraw = 200e18;
@@ -269,7 +268,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawUser(amountWithDraw);
     }
 
-    function test_WithDrawUser_ShouldWithDrawUsered() public setFork(fork){
+    function test_WithDrawUser_ShouldWithDrawUsered() public setFork(fork) {
         uint256 amountAddFund = 300e18;
         uint256 amountDeposit = 100e18;
         uint256 amountWithDraw = 50e18;
@@ -297,7 +296,7 @@ contract ForkPurrDeposit is BaseTest{
         assertEq(posBalancePurrDeposit, amountAddFund + amountDeposit - amountWithDraw);
     }
 
-    function test_WithDrawUser_ShouldEmit_EventWithDrawUser() public setFork(fork){
+    function test_WithDrawUser_ShouldEmit_EventWithDrawUser() public setFork(fork) {
         uint256 amountAddFund = 300e18;
         uint256 amountDeposit = 100e18;
         uint256 amountWithDraw = 50e18;
@@ -319,7 +318,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.withDrawUser(amountWithDraw);
     }
 
-    function test_UpdateBalanceDepositor_ShouldRevert_WhenNotOwner() public setFork(fork){
+    function test_UpdateBalanceDepositor_ShouldRevert_WhenNotOwner() public setFork(fork) {
         depositorAddresses.push(address(1));
         amounts.push(10);
 
@@ -330,7 +329,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
 
-    function test_UpdateBalanceDepositor_ShouldRevert_InvalidArgument() public setFork(fork){
+    function test_UpdateBalanceDepositor_ShouldRevert_InvalidArgument() public setFork(fork) {
         depositorAddresses.push(address(1));
         amounts.push(10);
         amounts.push(20);
@@ -342,7 +341,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
 
-    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork){
+    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public setFork(fork) {
         uint256 length = 100;
 
         for (uint256 i; i < length;) {
@@ -368,7 +367,7 @@ contract ForkPurrDeposit is BaseTest{
         }
     }
 
-    function test_TurnOffWithDraw_ShouldRevert_NotSubAdmin() public setFork(fork){
+    function test_TurnOffWithDraw_ShouldRevert_NotSubAdmin() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidSubAdmin(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
@@ -376,14 +375,14 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.turnOffWithDraw();
     }
 
-    function test_TurnOffWithDraw_ShouldTurnOffWithDrawed() public setFork(fork){
+    function test_TurnOffWithDraw_ShouldTurnOffWithDrawed() public setFork(fork) {
         vm.prank(users.subAdmin);
         purrDeposit.turnOffWithDraw();
 
         assertEq(purrDeposit.canWithDraw(), false);
     }
 
-    function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public setFork(fork){
+    function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
@@ -391,14 +390,14 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.updateStatusWithDraw(false);
     }
 
-    function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDrawed() public setFork(fork){
+    function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDrawed() public setFork(fork) {
         vm.prank(users.admin);
         purrDeposit.updateStatusWithDraw(false);
 
         assertEq(purrDeposit.canWithDraw(), false);
     }
 
-    function test_SetUsd_ShouldRevert_NotOwner() public setFork(fork){
+    function test_SetUsd_ShouldRevert_NotOwner() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
@@ -406,14 +405,14 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.setUsd(address(_usdc));
     }
 
-    function test_SetUsd_ShouldSetUsd() public setFork(fork){
+    function test_SetUsd_ShouldSetUsd() public setFork(fork) {
         vm.prank(users.admin);
         purrDeposit.setUsd(address(_usdc));
 
         assertEq(address(purrDeposit.usd()), address(_usdc));
     }
 
-    function test_SetRootAdmin_ShouldRevert_WhenNotRootAdmin() public setFork(fork){
+    function test_SetRootAdmin_ShouldRevert_WhenNotRootAdmin() public setFork(fork) {
         bytes4 selector = bytes4(keccak256("InvalidRootAdmin(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
@@ -421,14 +420,14 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.setRootAdmin(users.alice);
     }
 
-    function test_SetRootAdmin_ShouldSetRootAdmined() public setFork(fork){
+    function test_SetRootAdmin_ShouldSetRootAdmined() public setFork(fork) {
         vm.prank(users.rootAdmin);
         purrDeposit.setRootAdmin(users.rootAdmin);
 
         assertEq(users.rootAdmin, purrDeposit.rootAdmin());
     }
 
-    function test_TransferOwnership_ShouldRevert_WhenNotRootAdminAndOwner() public setFork(fork){
+    function test_TransferOwnership_ShouldRevert_WhenNotRootAdminAndOwner() public setFork(fork) {
         bytes4 selector1 = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector1, users.alice));
 
@@ -442,7 +441,7 @@ contract ForkPurrDeposit is BaseTest{
         purrDeposit.transferOwnership(users.subAdmin);
     }
 
-    function test_TransferOwnership_ShouldTransferOwnershiped() public setFork(fork){
+    function test_TransferOwnership_ShouldTransferOwnershiped() public setFork(fork) {
         vm.prank(users.admin);
         purrDeposit.transferOwnership(users.alice);
 
@@ -458,5 +457,4 @@ contract ForkPurrDeposit is BaseTest{
 
         assertEq(purrDeposit.canWithDraw(), true);
     }
-
 }

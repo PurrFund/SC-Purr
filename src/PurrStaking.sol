@@ -148,7 +148,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
                 }
             } else if (uint64(block.timestamp) <= end) {
                 userPool.timeUnstaked = uint64(block.timestamp) + pool.unstakeTime;
-                userPool.amountAvailable = _amount;
+                userPool.amountAvailable = totalWithDraw;
             }
         } else if (poolType == PoolType.TWO || poolType == PoolType.THREE || poolType == PoolType.FOUR) {
             if (uint64(block.timestamp) > end) {
@@ -180,7 +180,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
             revert InvalidItemId(_itemId);
         }
 
-        if (block.timestamp < userPool.timeUnstaked) {
+        if (block.timestamp <= userPool.timeUnstaked) {
             revert CanNotWithClaimPoolOne();
         }
 
@@ -195,6 +195,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
         PurrToken(launchPadToken).safeTransfer(msg.sender, userPool.amountAvailable);
 
         userPool.amountAvailable = 0;
+        userPool.timeUnstaked = 0;
 
         if (userPool.stakedAmount == 0) {
             delete userPoolInfo[_itemId];

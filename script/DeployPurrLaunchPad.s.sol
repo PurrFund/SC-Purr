@@ -37,7 +37,7 @@ contract DeployPurrLaunchPadScript is BaseScript {
         launchPad = LaunchPad({
             unlockPercent: 1000,
             startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days), 
+            snapshotTime: uint64(block.timestamp + 2 days),
             autoVestingTime: uint64(block.timestamp + 3 days),
             vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,
@@ -55,7 +55,7 @@ contract DeployPurrLaunchPadScript is BaseScript {
         launchPool = LaunchPool({
             unlockPercent: 1000,
             startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days), 
+            snapshotTime: uint64(block.timestamp + 2 days),
             autoVestingTime: uint64(block.timestamp + 3 days),
             vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,

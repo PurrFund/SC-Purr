@@ -22,9 +22,12 @@ struct PreProject {
     string website;
 }
 
-struct LaunchPool {
+struct LaunchPad{
     uint16 unlockPercent;
+    uint64 startTime;
     uint64 snapshotTime;
+    uint64 autoVestingTime;
+    uint64 vestingTime;
     uint16[] percents;
     uint64[] times;
     uint256 tge;
@@ -37,9 +40,12 @@ struct LaunchPool {
     VestingType typeVesting;
 }
 
-struct LaunchPad {
+struct LaunchPool{
     uint16 unlockPercent;
+    uint64 startTime;
     uint64 snapshotTime;
+    uint64 autoVestingTime;
+    uint64 vestingTime;
     uint16[] percents;
     uint64[] times;
     uint256 tge;

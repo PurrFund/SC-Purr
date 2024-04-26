@@ -5,16 +5,16 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 
 import { UserPoolInfo, PoolInfo, PoolType, TierType, TierInfo } from "./types/PurrStaingType.sol";
 import { IPurrStaking } from "./interfaces/IPurrStaking.sol";
 import { PurrToken } from "./token/PurrToken.sol";
 
 /**
- * @title PurrStaking
- * @notice
+ * @notice PurrStaking contract.
  */
-contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
+contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for PurrToken;
     using Math for uint256;
 
@@ -40,10 +40,14 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     {
         launchPadToken = PurrToken(_launchPadToken);
         SECOND_YEAR = 31_536_000;
+
+        // upadte poolInfo
         poolInfo[PoolType.ONE] = _pools[0];
         poolInfo[PoolType.TWO] = _pools[1];
         poolInfo[PoolType.THREE] = _pools[2];
         poolInfo[PoolType.FOUR] = _pools[3];
+
+        // update tierinfor
         tierInfo[TierType.ONE] = _tiers[0];
         tierInfo[TierType.TWO] = _tiers[1];
         tierInfo[TierType.THREE] = _tiers[2];
@@ -53,17 +57,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Stake token's protocol.
-     *
-     * @dev Will update user's power base on user's balance.
-     * @dev Emit a {Stake} event.
-     *
-     * Requirements:
-     *   - Require sender approve amount token's staking for this contract more than {amount}.
-     *
-     * @param _amount The amount user will stake.
+     * @inheritdoc IPurrStaking
      */
-    function stake(uint256 _amount, PoolType _poolType) external nonReentrant {
+    function stake(uint256 _amount, PoolType _poolType) external whenNotPaused nonReentrant {
         address sender = msg.sender;
         PoolInfo storage pool = poolInfo[_poolType];
         uint256 point = _amount.mulDiv(pool.multiplier, 10, Math.Rounding.Floor);
@@ -105,19 +101,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
     }
 
     /**
-     * @notice Unstake token's protocol.
-     *
-     * @dev Will update user's power base on user's balance.
-     * @dev Do not transfer {amount} to owner, lock {amount} for {timeLock} before can withdraw.
-     * @dev Emit a {UnStake} event.
-     *
-     * Requirements:
-     *   - Amount must be smaller than current balance stake.
-     *
-     * @param _amount The amount user will stake.
-     * @param _itemId The item id.
+     * @inheritdoc IPurrStaking
      */
-    function unstake(uint256 _amount, uint256 _itemId) external nonReentrant {
+    function unstake(uint256 _amount, uint256 _itemId) external whenNotPaused nonReentrant {
         address sender = msg.sender;
         UserPoolInfo storage userPool = userPoolInfo[_itemId];
         PoolType poolType = userPool.poolType;
@@ -168,7 +154,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
             if (uint64(block.timestamp) > end) {
                 PurrToken(launchPadToken).safeTransfer(sender, totalWithDraw);
             } else if (uint64(block.timestamp) <= end) {
-                uint256 burnAmount = _amount.mulDiv(unstakeFee, 10_000, Math.Rounding.Floor); 
+                uint256 burnAmount = _amount.mulDiv(unstakeFee, 10_000, Math.Rounding.Floor);
                 uint256 remainAmount = totalWithDraw - burnAmount;
                 PurrToken(launchPadToken).safeTransfer(sender, remainAmount);
                 PurrToken(launchPadToken).burn(burnAmount);
@@ -183,7 +169,10 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         emit UnStake(sender, _amount, userPool.pPoint, uint64(block.timestamp), poolType);
     }
 
-    function claimUnstakePoolOne(uint256 _itemId) external nonReentrant {
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function claimUnstakePoolOne(uint256 _itemId) external whenNotPaused nonReentrant {
         address sender = msg.sender;
         UserPoolInfo storage userPool = userPoolInfo[_itemId];
 
@@ -214,13 +203,18 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getPendingReward(uint256 _itemId) external view returns (uint256) {
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
         return _calculatePendingReward(userPool);
     }
 
-    // update start time
-    function claimReward(uint256 _itemId) external nonReentrant {
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function claimReward(uint256 _itemId) external whenNotPaused nonReentrant {
         address sender = msg.sender;
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
 
@@ -236,24 +230,29 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         userPoolInfo[_itemId].updateAt = uint64(block.timestamp);
 
         PurrToken(launchPadToken).safeTransfer(sender, reward);
-
-        emit ClaimReward(sender, reward, uint64(block.timestamp));
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function updatePool(PoolInfo memory _pool) external onlyOwner {
         poolInfo[_pool.poolType] = _pool;
 
         emit UpdatePool(_pool);
     }
 
-    function updateTier(TierInfo memory tier) external onlyOwner {
-        tierInfo[tier.tierType] = tier;
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function updateTier(TierInfo memory _tier) external onlyOwner {
+        tierInfo[_tier.tierType] = _tier;
 
-        emit UpdateTier(tier);
+        emit UpdateTier(_tier);
     }
 
-    // how to calculate AVG APY
-    // how to caculate reward
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getTotalStakedPool() external view returns (uint256, uint256, uint256, uint256) {
         PoolInfo memory poolOne = poolInfo[PoolType.ONE];
         PoolInfo memory poolTwo = poolInfo[PoolType.TWO];
@@ -268,6 +267,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         return (totalStaked, totalNumberStaker, totalReward, avgAPY);
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getUserTotalStaked() external view returns (uint256, uint256) {
         uint256[] memory itemIds = userItemInfo[msg.sender];
         uint256 length = itemIds.length;
@@ -286,16 +288,47 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard {
         return (totalStaked, totalPoint);
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getUserItemId() external view returns (uint256[] memory) {
         return userItemInfo[msg.sender];
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function addFund(uint256 _amount) external onlyOwner {
+        if (_amount <= 0) {
+            revert InvalidAmount(_amount);
+        }
+
+        PurrToken(launchPadToken).safeTransferFrom(msg.sender, address(this), _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function emergencyWithdraw(uint256 _amount) external onlyOwner {
         if (launchPadToken.balanceOf(address(this)) < _amount) {
             revert InsufficientBalance(launchPadToken.balanceOf(address(this)));
         }
 
         PurrToken(launchPadToken).safeTransfer(msg.sender, _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function unpause() external onlyOwner {
+        _unpause();
     }
 
     function _calculatePendingReward(UserPoolInfo memory userPool) internal view returns (uint256) {

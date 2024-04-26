@@ -1014,6 +1014,195 @@ contract PurrStakingTest is BaseTest {
         purrStaking.updateTier(expectTier);
     }
 
+    function test_getTotalStakedPool_ShouldGetTotalStakedPool() public {
+        _deal(users.carole, 100e18);
+        _deal(users.maker, 100e18);
+        _deal(address(3), 100e18);
+         
+        uint256 amount = 10e18;
+        vm.warp(1);
+        vm.startPrank(users.alice);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.ONE);
+        vm.stopPrank();
+
+        (uint64 updateAt1,,,,,,, PoolType poolType1) = purrStaking.userPoolInfo(1);
+
+        (, uint16 _apy1,,,,,,) = purrStaking.poolInfo(poolType1);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked1 = block.timestamp - updateAt1;
+        uint256 expectTimeStaked1 = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked1, expectTimeStaked1);
+
+        uint256 timeStakedMulApy1 = expectTimeStaked1 * _apy1;
+        uint256 div1 = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward1 = amount.mulDiv(timeStakedMulApy1, div1, Math.Rounding.Floor);
+
+        uint256 actualReward1 = purrStaking.getPendingReward(1);
+
+        assertEq(expectReward1, actualReward1);
+        /////////////////////////////////////
+
+        vm.warp(1);
+        vm.startPrank(users.bob);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.TWO);
+        vm.stopPrank();
+
+        (uint64 _updateAt2,,,,,,, PoolType _poolType2) = purrStaking.userPoolInfo(2);
+
+        (, uint16 _apy2,,,,,,) = purrStaking.poolInfo(_poolType2);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked2 = block.timestamp - _updateAt2;
+        uint256 expectTimeStaked2 = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked2, expectTimeStaked2);
+
+        uint256 timeStakedMulApy2 = expectTimeStaked2 * _apy2;
+        uint256 div2 = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward2 = amount.mulDiv(timeStakedMulApy2, div2, Math.Rounding.Floor);
+
+        uint256 actualReward2 = purrStaking.getPendingReward(2);
+
+        assertEq(expectReward2, actualReward2);
+        ////////////////////////////////////
+        
+        vm.warp(1);
+        vm.startPrank(users.bob);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        (uint64 _updateAt3,,,,,,, PoolType _poolType3) = purrStaking.userPoolInfo(3);
+
+        (, uint16 _apy3,,,,,,) = purrStaking.poolInfo(_poolType3);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked3 = block.timestamp - _updateAt3;
+        uint256 expectTimeStaked3 = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked3, expectTimeStaked3);
+
+        uint256 timeStakedMulApy3 = expectTimeStaked3 * _apy3;
+        uint256 div3 = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward3 = amount.mulDiv(timeStakedMulApy3, div3, Math.Rounding.Floor);
+
+        uint256 actualReward3 = purrStaking.getPendingReward(3);
+
+        assertEq(expectReward3, actualReward3);
+        //////////////////////////////////
+
+        vm.warp(1);
+        vm.startPrank(users.maker);
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.FOUR);
+        vm.stopPrank();
+
+        (uint64 _updateAt4,,,,,,, PoolType _poolType4) = purrStaking.userPoolInfo(4);
+
+        (, uint16 _apy4,,,,,,) = purrStaking.poolInfo(_poolType4);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked4 = block.timestamp - _updateAt4;
+        uint256 expectTimeStaked4 = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked4, expectTimeStaked4);
+
+        uint256 timeStakedMulApy4 = expectTimeStaked4 * _apy4;
+        uint256 div4 = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward4 = amount.mulDiv(timeStakedMulApy4, div4, Math.Rounding.Floor);
+
+        uint256 actualReward4 = purrStaking.getPendingReward(4);
+
+        assertEq(expectReward4, actualReward4);
+        //////////////////////////
+
+        vm.warp(1);
+        vm.startPrank(address(3));
+        launchPadToken.approve(address(purrStaking), amount);
+        purrStaking.stake(amount, PoolType.THREE);
+        vm.stopPrank();
+
+        (uint64 _updateAt5,,,,,,, PoolType _poolType5) = purrStaking.userPoolInfo(5);
+
+        (, uint16 _apy5,,,,,,) = purrStaking.poolInfo(_poolType5);
+
+        vm.warp(365 days + 1 seconds);
+        uint256 timeStaked5 = block.timestamp - _updateAt5;
+        uint256 expectTimeStaked5 = 365 days + 1 seconds - 1 seconds;
+        assertEq(timeStaked5, expectTimeStaked5);
+
+        uint256 timeStakedMulApy5 = expectTimeStaked5 * _apy5;
+        uint256 div5 = 10_000 * purrStaking.SECOND_YEAR();
+        uint256 expectReward5 = amount.mulDiv(timeStakedMulApy5, div5, Math.Rounding.Floor);
+
+        uint256 actualReward5 = purrStaking.getPendingReward(5);
+
+        assertEq(expectReward5, actualReward5);
+
+        uint256 totalExpectReward = expectReward1 + expectReward2 + expectReward3 + expectReward4 + expectReward5;
+
+        uint256 totalApy = _apy1 + _apy2 + _apy3 + _apy4;
+        uint256 avgAPY = totalApy / 4;
+
+        (
+            uint256 _totalStaked, 
+            uint256 _totalNumberStaker, 
+            uint256 _totalReward, 
+            uint256 _avgAPY
+        ) = purrStaking.getTotalStakedPool();
+
+        uint256 _itemId = 5;
+        assertEq(_itemId, purrStaking.itemId());
+        assertEq(_totalStaked, 50e18);
+        assertEq(_totalNumberStaker, 5);
+        assertEq(_totalReward, totalExpectReward);
+        assertEq(_avgAPY, avgAPY);
+    }
+
+    function test_withdrawRewardPool_ShouldRevert_WhenNotOwner() public {
+        uint256 amountWithdraw = 5e18;
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrStaking.withdrawRewardPool(amountWithdraw);
+    }
+
+    // function test_withdrawRewardPool_ShouldRevert_WhenInsufficientBalance() public {
+    //     uint256 amountWithdraw = 5e18;
+
+    //     vm.startPrank(users.admin);
+    //     launchPadToken.transfer(users.admin, launchPadToken.balanceOf(address(purrStaking)));
+    //     vm.stopPrank();
+
+    //     assertEq()
+
+    //     bytes4 selector = bytes4(keccak256("InsufficientBalance(uint256)"));
+    //     vm.expectRevert(abi.encodeWithSelector(selector, launchPadToken.balanceOf(address(purrStaking))));
+
+    //     vm.prank(users.admin);
+    //     purrStaking.withdrawRewardPool(amountWithdraw);
+    // }
+
+    // function test_withdrawRewardPool_ShouldWithdrawRewardPool() public {
+    //     uint256 amountWithdraw = 5e18;
+
+    //     uint256 preBalanceAdmin = launchPadToken.balanceOf(users.admin);
+    //     uint256 preBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+
+    //     vm.prank(users.admin);
+    //     purrStaking.withdrawRewardPool(amountWithdraw);
+
+    //     uint256 posBalanceAdmin = launchPadToken.balanceOf(users.admin);
+    //     uint256 posBalancePurrStaking = launchPadToken.balanceOf(address(purrStaking));
+
+    //     uint256 amountWithdrawAmin = preBalanceAdmin - posBalanceAdmin;
+    //     uint256 amountWithdrawPurrStaking = posBalancePurrStaking - preBalancePurrStaking;
+
+    //     assertEq(amountWithdrawAmin, amountWithdrawPurrStaking);
+    //     assertEq(amountWithdrawAmin, amountWithdraw);
+    // }
+
     function _initPools() internal {
         PoolInfo memory pool1 = PoolInfo({
             unstakeFee: 0,

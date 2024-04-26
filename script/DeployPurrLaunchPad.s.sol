@@ -34,9 +34,12 @@ contract DeployPurrLaunchPadScript is BaseScript {
             website: "website.com"
         });
 
-        launchPool = LaunchPool({
+        launchPad = LaunchPad({
             unlockPercent: 1000,
-            snapshotTime: uint64(block.timestamp + 2 days),
+            startTime: uint64(block.timestamp - 2 days),
+            snapshotTime: uint64(block.timestamp + 2 days), 
+            autoVestingTime: uint64(block.timestamp + 3 days),
+            vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,
             times: time,
             tge: block.timestamp + 10 days,
@@ -49,9 +52,12 @@ contract DeployPurrLaunchPadScript is BaseScript {
             typeVesting: VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
         });
 
-        launchPad = LaunchPad({
+        launchPool = LaunchPool({
             unlockPercent: 1000,
-            snapshotTime: uint64(block.timestamp + 2 days),
+            startTime: uint64(block.timestamp - 2 days),
+            snapshotTime: uint64(block.timestamp + 2 days), 
+            autoVestingTime: uint64(block.timestamp + 3 days),
+            vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,
             times: time,
             tge: block.timestamp + 10 days,

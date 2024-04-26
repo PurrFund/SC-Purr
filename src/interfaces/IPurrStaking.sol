@@ -1,7 +1,7 @@
 // SPDX-License-Identifer: MIT
 pragma solidity ^0.8.20;
 
-import { PoolType, PoolInfo, TierInfo, TierType } from "../types/PurrStaingType.sol";
+import { PoolType, PoolInfo, TierInfo } from "../types/PurrStaingType.sol";
 
 interface IPurrStaking {
     // event list
@@ -42,7 +42,7 @@ interface IPurrStaking {
      *
      * @param _amount The amount user will stake.
      * @param _poolType The type of pool.
-    */
+     */
     function stake(uint256 _amount, PoolType _poolType) external;
 
     /**

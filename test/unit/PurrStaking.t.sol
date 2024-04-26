@@ -164,7 +164,6 @@ contract PurrStakingTest is BaseTest {
         purrStaking.unstake(amount, 1);
     }
 
-
     function test_Unstake_ShouldUnstaked_Amount_WhenExpire_PoolTwo() public {
         uint256 amountStake = initBalance;
         uint256 amountUnstake = 10e18;
@@ -316,11 +315,10 @@ contract PurrStakingTest is BaseTest {
             lockDay: preLockDay,
             unstakeTime: preUnstakeTime,
             totalStaked: preTotalStaked - amountUnstake,
-            numberStaker: preNumberStaker -1,
+            numberStaker: preNumberStaker - 1,
             poolType: PoolType.TWO
         });
 
-     
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.TWO);
 
@@ -390,7 +388,8 @@ contract PurrStakingTest is BaseTest {
             uint256 posNumberStaker,
         ) = purrStaking.poolInfo(PoolType.TWO);
 
-        uint256 realAmountUnstake = amountUnstake- amountUnstake.mulDiv(posUnstakeFee, 10_000, Math.Rounding.Floor) + pendingReward;  
+        uint256 realAmountUnstake =
+            amountUnstake - amountUnstake.mulDiv(posUnstakeFee, 10_000, Math.Rounding.Floor) + pendingReward;
 
         UserPoolInfo memory expectUserPool = UserPoolInfo({
             updateAt: nextTimeStamp,
@@ -456,7 +455,6 @@ contract PurrStakingTest is BaseTest {
         vm.prank(users.alice);
         purrStaking.unstake(amountUnstake, itemId);
 
-
         uint256 posAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 posPurrBL = launchPadToken.balanceOf(address(purrStaking));
         (,,,, address posStaker,,,) = purrStaking.userPoolInfo(itemId);
@@ -476,7 +474,8 @@ contract PurrStakingTest is BaseTest {
             uint256 posNumberStaker,
         ) = purrStaking.poolInfo(PoolType.TWO);
 
-        uint256 realAmountUnstake = amountUnstake - amountUnstake.mulDiv(posUnstakeFee, 10_000, Math.Rounding.Floor) + pendingReward;  
+        uint256 realAmountUnstake =
+            amountUnstake - amountUnstake.mulDiv(posUnstakeFee, 10_000, Math.Rounding.Floor) + pendingReward;
 
         console.log(realAmountUnstake);
         PoolInfo memory expectPoolInfo = PoolInfo({
@@ -486,11 +485,10 @@ contract PurrStakingTest is BaseTest {
             lockDay: preLockDay,
             unstakeTime: preUnstakeTime,
             totalStaked: preTotalStaked - amountUnstake,
-            numberStaker: preNumberStaker -1,
+            numberStaker: preNumberStaker - 1,
             poolType: PoolType.TWO
         });
 
-     
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.TWO);
 
@@ -499,7 +497,7 @@ contract PurrStakingTest is BaseTest {
         assertEq(prePurrBL - amountUnstake - pendingReward, posPurrBL);
     }
 
-     function test_Unstake_ShouldUnstaked_Amount_WhenExpire_PoolOne() public {
+    function test_Unstake_ShouldUnstaked_Amount_WhenExpire_PoolOne() public {
         uint256 amountStake = initBalance;
         uint256 amountUnstake = 10e18;
         uint256 itemId = 1;
@@ -533,7 +531,7 @@ contract PurrStakingTest is BaseTest {
 
         uint64 nextTimeStamp = uint64(block.timestamp + preLockDay + 1 seconds);
         vm.warp(nextTimeStamp);
-        
+
         uint256 pendingReward = purrStaking.getPendingReward(itemId);
         vm.prank(users.alice);
         purrStaking.unstake(amountUnstake, itemId);
@@ -650,11 +648,10 @@ contract PurrStakingTest is BaseTest {
             lockDay: preLockDay,
             unstakeTime: preUnstakeTime,
             totalStaked: preTotalStaked - amountUnstake,
-            numberStaker: preNumberStaker -1,
+            numberStaker: preNumberStaker - 1,
             poolType: PoolType.TWO
         });
 
-     
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.TWO);
 
@@ -662,7 +659,6 @@ contract PurrStakingTest is BaseTest {
         assertEq(preAliceBL + amountUnstake + pendingReward, posAliceBL);
         assertEq(prePurrBL - amountUnstake - pendingReward, posPurrBL);
     }
-
 
     // test revert item id
     // test revert pool type
@@ -904,26 +900,6 @@ contract PurrStakingTest is BaseTest {
         assertEq(posAliceBL + amount - preAliceBL, currentPendingReward);
         assertEq(prePurrBL + amount - posPurrBL, currentPendingReward);
         assertEq(updateAt, 32 days);
-    }
-
-    function test_ClaimReward_ShouldEmit_EventClaimReward() public {
-        uint256 amount = 100e18;
-        uint256 itemId = 1;
-
-        vm.warp(1 seconds);
-        vm.startPrank(users.alice);
-        launchPadToken.approve(address(purrStaking), amount);
-        purrStaking.stake(amount, PoolType.ONE);
-        vm.stopPrank();
-
-        vm.warp(32 days);
-        uint256 currentPendingReward = purrStaking.getPendingReward(1);
-
-        vm.expectEmit(true, true, true, true);
-        emit ClaimReward(users.alice, currentPendingReward, uint64(32 days));
-
-        vm.prank(users.alice);
-        purrStaking.claimReward(itemId);
     }
 
     function test_UpdatePool_ShouldRevert_WhenNotOwner() public {

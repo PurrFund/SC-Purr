@@ -1000,7 +1000,7 @@ contract PurrStakingTest is BaseTest {
             multiplier: multiplier,
             lockDay: preLockDay,
             unstakeTime: preUnstakeTime,
-            totalStaked: preTotalStaked ,
+            totalStaked: preTotalStaked,
             numberStaker: preNumberStaker,
             poolType: PoolType.ONE
         });

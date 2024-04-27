@@ -263,7 +263,16 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
         uint256 totalStaked = poolOne.totalStaked + poolTwo.totalStaked + poolThree.totalStaked + poolFour.totalStaked;
         uint256 totalNumberStaker = poolOne.numberStaker + poolTwo.numberStaker + poolThree.numberStaker + poolFour.numberStaker;
         uint256 totalReward = 0;
-        uint256 avgAPY = 0;
+        for(uint256 i = 1; i <= itemId;){
+            UserPoolInfo memory userPool = userPoolInfo[i];
+            totalReward += _calculatePendingReward(userPool);
+
+            unchecked {
+                ++i;
+            }
+        }
+        uint256 totalApy = poolOne.apy + poolTwo.apy + poolThree.apy + poolFour.apy;
+        uint256 avgAPY = totalApy / 4;
 
         return (totalStaked, totalNumberStaker, totalReward, avgAPY);
     }
@@ -310,7 +319,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
-    function emergencyWithdraw(uint256 _amount) external onlyOwner {
+    function withdrawRewardPool(uint256 _amount) external onlyOwner {
         if (launchPadToken.balanceOf(address(this)) < _amount) {
             revert InsufficientBalance(launchPadToken.balanceOf(address(this)));
         }

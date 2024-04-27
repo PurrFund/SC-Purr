@@ -151,8 +151,8 @@ interface IPurrStaking {
      *
      * @param _amount The withdraw amount.
      */
-    function emergencyWithdraw(uint256 _amount) external;
-
+    function withdrawRewardPool(uint256 _amount) external;
+    
     /**
      * @notice Pause stake, unstake, claim feature on contract.
      *

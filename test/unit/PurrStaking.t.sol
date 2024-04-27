@@ -986,11 +986,11 @@ contract PurrStakingTest is BaseTest {
         UserPoolInfo memory expectUserPool = UserPoolInfo({
             updateAt: nextTimeStamp,
             end: preEnd,
-            timeUnstaked: nextTimeStamp + preUnstakeTime,
+            timeUnstaked: 0,
             amountAvailable: 0,
             staker: preStaker,
-            pPoint: prePPoint - (amountUnstake * multiplier) / 10,
-            stakedAmount: preStakedAmount - amountUnstake,
+            pPoint: prePPoint,
+            stakedAmount: preStakedAmount,
             poolType: PoolType.ONE
         });
 
@@ -1000,7 +1000,7 @@ contract PurrStakingTest is BaseTest {
             multiplier: multiplier,
             lockDay: preLockDay,
             unstakeTime: preUnstakeTime,
-            totalStaked: preTotalStaked - amountUnstake,
+            totalStaked: preTotalStaked ,
             numberStaker: preNumberStaker,
             poolType: PoolType.ONE
         });

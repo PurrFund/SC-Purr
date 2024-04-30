@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import { Test, console } from "forge-std/Test.sol";
 import { BaseTest } from "../../Base.t.sol";
 import { PurrDeposit } from "../../../src/PurrDeposit.sol";
 import { IBEP20 } from "../../../src/interfaces/IBEP20.sol";

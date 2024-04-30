@@ -9,15 +9,17 @@ interface IPurrStaking {
         address indexed staker,
         uint256 indexed itemId,
         uint256 amount,
-        uint256 point,
+        uint256 pPoint,
         uint64 updateAt,
         uint64 end,
         PoolType poolType
     );
-    event UnStake(address indexed staker, uint256 amount, uint256 point, uint64 time, PoolType pool);
+    event UnStake(address indexed staker, uint256 unStakeAmount, uint256 lossPoint, uint64 time, PoolType pool);
     event ClaimReward(address indexed claimer, uint256 amount, uint64 claimAt);
     event UpdatePool(PoolInfo pool);
     event UpdateTier(TierInfo tier);
+    event ClaimUnstakePoolOne(address staker, uint256 amount, uint64 claimTime);
+    event ClaimPendingReward(address staker, uint256 amount, uint64 claimTime);
 
     // error list
     error InsufficientAmount(uint256 amount);
@@ -32,13 +34,15 @@ interface IPurrStaking {
     error CanNotWithClaimPoolOne();
 
     /**
-     * @notice Stake token's protocol.
+     * @notice Stake token to pool.
      *
      * @dev Will update user's point base on user's balance.
      * @dev Emit a {Stake} event.
      *
      * Requirements:
-     *   - Require sender approve amount token's staking for this contract more than {amount}.
+     *   -  Sender must approve amount token's staking for this contract more than {amount}.
+     *   -  PoolType must be valid, must follow in {PoolType}.
+     *   -  Amount must greater than zero.
      *
      * @param _amount The amount user will stake.
      * @param _poolType The type of pool.
@@ -49,11 +53,13 @@ interface IPurrStaking {
      * @notice Unstake token's protocol.
      *
      * @dev Will update user's point base on user's balance.
+     * @dev Base on lockday, unstake fee and unstake time of each pool will update and calculate amount staker will get.
      * @dev Emit a {UnStake} event.
      *
      * Requirements:
-     *   - Amount must be smaller than current balance stake.
+     *   - Amount must be smaller than current balance staked corresponding that itemId.
      *   - Sender must be owner of item.
+     *   - ItemId must be valid.
      *
      * @param _amount The amount user will stake.
      * @param _itemId The item id.
@@ -63,11 +69,13 @@ interface IPurrStaking {
     /**
      * @notice Claim token from pool one after unstake.
      *
-     * @dev Will update user's amount avaiable to zero.
-     * @dev Emit a {UnStake} event.
+     * @dev Will withdraw all amount available after {unstakeTime} from the time unstake.
      *
      * Requirements:
      *   - Sender must be owner of item.
+     *   - Itemid must be valid.
+     *   - The current timestamp must be greater than 10 days from the time unstake.
+     *   - The poolType must be type {ONE}.
      *
      * @param _itemId The item id.
      */
@@ -115,16 +123,23 @@ interface IPurrStaking {
     /**
      * @notice Get analysis staking system.
      *
-     * @return The analysis staking system.
+     * @return totalStaked The total amount user stake.
+     * @return totalNumberStaker The number user stake.
+     * @return totalReward The total current pending reward.
+     * @return avgAPY The average APY.
      */
-    function getTotalStakedPool() external view returns (uint256, uint256, uint256, uint256);
+    function getTotalStakedPool()
+        external
+        view
+        returns (uint256 totalStaked, uint256 totalNumberStaker, uint256 totalReward, uint256 avgAPY);
 
     /**
      * @notice Get staker's analysis staking system.
      *
-     * @return The staker's analysis staking system.
+     * @return totalStaked The total amount of sender.
+     * @return totalPoint The total amount point of sender.
      */
-    function getUserTotalStaked() external view returns (uint256, uint256);
+    function getUserTotalStaked() external view returns (uint256 totalStaked, uint256 totalPoint);
 
     /**
      * @notice Get list staker's itemId.
@@ -151,8 +166,8 @@ interface IPurrStaking {
      *
      * @param _amount The withdraw amount.
      */
-    function withdrawRewardPool(uint256 _amount) external;
-    
+    function withdrawFund(uint256 _amount) external;
+
     /**
      * @notice Pause stake, unstake, claim feature on contract.
      *

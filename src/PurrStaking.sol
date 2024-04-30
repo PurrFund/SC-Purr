@@ -24,11 +24,12 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
 
     PurrToken public launchPadToken;
 
-    mapping(PoolType poolType => PoolInfo pool) public poolInfo;
     mapping(uint256 itemId => UserPoolInfo userPool) public userPoolInfo;
     mapping(address staker => uint256[] itemIds) public userItemInfo;
-    mapping(TierType tierType => TierInfo tier) public tierInfo;
     mapping(uint256 itemId => uint256 index) public itemIdIndexInfo;
+
+    mapping(TierType tierType => TierInfo tier) public tierInfo;
+    mapping(PoolType poolType => PoolInfo pool) public poolInfo;
 
     constructor(
         address _launchPadToken,
@@ -84,7 +85,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
             end: uint64(block.timestamp + pool.lockDay),
             timeUnstaked: 0,
             amountAvailable: 0,
-            staker: msg.sender,
+            staker: sender,
             pPoint: point,
             stakedAmount: _amount,
             poolType: _poolType
@@ -108,6 +109,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
         UserPoolInfo storage userPool = userPoolInfo[_itemId];
         PoolType poolType = userPool.poolType;
         PoolInfo storage pool = poolInfo[poolType];
+        uint256 prePPoint = userPool.pPoint;
 
         if (_amount <= 0 || _amount > userPool.stakedAmount) {
             revert InvalidAmount(_amount);
@@ -123,6 +125,8 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
 
         uint16 unstakeFee = pool.unstakeFee;
         uint64 end = userPool.end;
+
+        // calculate pending reward
         uint256 reward = _calculatePendingReward(userPool);
 
         // update userPool infor
@@ -166,7 +170,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        emit UnStake(sender, _amount, userPool.pPoint, uint64(block.timestamp), poolType);
+        emit UnStake(sender, _amount, prePPoint - userPool.pPoint, uint64(block.timestamp), poolType);
     }
 
     /**
@@ -194,14 +198,16 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
 
         PurrToken(launchPadToken).safeTransfer(msg.sender, userPool.amountAvailable);
 
-        userPool.amountAvailable = 0;
-        userPool.timeUnstaked = 0;
-
         if (userPool.stakedAmount == 0) {
             delete userPoolInfo[_itemId];
             delete userItemInfo[msg.sender][itemIdIndexInfo[itemId]];
             delete itemIdIndexInfo[itemId];
         }
+
+        emit ClaimUnstakePoolOne(sender, userPool.amountAvailable, uint64(block.timestamp));
+
+        userPool.amountAvailable = 0;
+        userPool.timeUnstaked = 0;
     }
 
     /**
@@ -222,6 +228,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
         if (sender != userPool.staker) {
             revert InvalidStaker(sender);
         }
+
         uint256 reward = _calculatePendingReward(userPool);
 
         if (launchPadToken.balanceOf(address(this)) < reward) {
@@ -231,6 +238,8 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
         userPoolInfo[_itemId].updateAt = uint64(block.timestamp);
 
         PurrToken(launchPadToken).safeTransfer(sender, reward);
+
+        emit ClaimPendingReward(sender, reward, uint64(block.timestamp));
     }
 
     /**
@@ -254,25 +263,30 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
-    function getTotalStakedPool() external view returns (uint256, uint256, uint256, uint256) {
+    function getTotalStakedPool()
+        external
+        view
+        returns (uint256 totalStaked, uint256 totalNumberStaker, uint256 totalReward, uint256 avgAPY)
+    {
         PoolInfo memory poolOne = poolInfo[PoolType.ONE];
         PoolInfo memory poolTwo = poolInfo[PoolType.TWO];
         PoolInfo memory poolThree = poolInfo[PoolType.THREE];
         PoolInfo memory poolFour = poolInfo[PoolType.FOUR];
 
-        uint256 totalStaked = poolOne.totalStaked + poolTwo.totalStaked + poolThree.totalStaked + poolFour.totalStaked;
-        uint256 totalNumberStaker = poolOne.numberStaker + poolTwo.numberStaker + poolThree.numberStaker + poolFour.numberStaker;
-        uint256 totalReward = 0;
-        for(uint256 i = 1; i <= itemId;){
-            UserPoolInfo memory userPool = userPoolInfo[i];
-            totalReward += _calculatePendingReward(userPool);
+        totalStaked = poolOne.totalStaked + poolTwo.totalStaked + poolThree.totalStaked + poolFour.totalStaked;
+        totalNumberStaker = poolOne.numberStaker + poolTwo.numberStaker + poolThree.numberStaker + poolFour.numberStaker;
+        totalReward = 0;
+        uint256 i = 1;
+        for (; i <= itemId;) {
+            totalReward += _calculatePendingReward(userPoolInfo[i]);
 
             unchecked {
                 ++i;
             }
         }
+
         uint256 totalApy = poolOne.apy + poolTwo.apy + poolThree.apy + poolFour.apy;
-        uint256 avgAPY = totalApy / 4;
+        avgAPY = totalApy / 4;
 
         return (totalStaked, totalNumberStaker, totalReward, avgAPY);
     }
@@ -280,11 +294,9 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
-    function getUserTotalStaked() external view returns (uint256, uint256) {
+    function getUserTotalStaked() external view returns (uint256 totalStaked, uint256 totalPoint) {
         uint256[] memory itemIds = userItemInfo[msg.sender];
         uint256 length = itemIds.length;
-        uint256 totalStaked;
-        uint256 totalPoint;
 
         for (uint256 i; i < length;) {
             totalStaked += userPoolInfo[itemIds[i]].stakedAmount;
@@ -319,9 +331,12 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
-    function withdrawRewardPool(uint256 _amount) external onlyOwner {
-        if (launchPadToken.balanceOf(address(this)) < _amount) {
-            revert InsufficientBalance(launchPadToken.balanceOf(address(this)));
+    function withdrawFund(uint256 _amount) external onlyOwner {
+        uint256 totalStaked = poolInfo[PoolType.ONE].totalStaked + poolInfo[PoolType.TWO].totalStaked
+            + poolInfo[PoolType.THREE].totalStaked + poolInfo[PoolType.FOUR].totalStaked;
+
+        if (totalStaked <= _amount) {
+            revert InvalidAmount(_amount);
         }
 
         PurrToken(launchPadToken).safeTransfer(msg.sender, _amount);

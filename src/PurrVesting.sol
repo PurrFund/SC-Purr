@@ -129,7 +129,7 @@ contract PurrVesting is Ownable, ReentrancyGuard, IPurrVesting {
             }
         }
 
-        poolInfo[poolIndex].fundsTotal += totalFundDeposit; 
+        poolInfo[poolIndex].fundsTotal += totalFundDeposit;
 
         IERC20(poolInfo[poolIndex].tokenFund).safeTransferFrom(sender, address(this), totalFundDeposit);
 

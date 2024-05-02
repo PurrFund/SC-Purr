@@ -1689,7 +1689,8 @@ contract PurrStakingTest is BaseTest {
 
     function test_WithdrawFund_ShouldRevert_WhenInvalidAmount() public {
         uint256 amount = 10e18;
-        uint256 amountWithDraw = 100e18;
+        uint256 purrBL = launchPadToken.balanceOf(address(purrStaking));
+        uint256 amountWithDraw = purrBL + 1;
 
         vm.startPrank(users.alice);
         launchPadToken.approve(address(purrStaking), amount);

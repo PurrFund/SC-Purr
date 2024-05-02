@@ -263,6 +263,45 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
+    function addFund(uint256 _amount) external onlyOwner {
+        if (_amount <= 0) {
+            revert InvalidAmount(_amount);
+        }
+
+        PurrToken(launchPadToken).safeTransferFrom(msg.sender, address(this), _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function withdrawFund(uint256 _amount) external onlyOwner {
+        uint256 totalStaked = poolInfo[PoolType.ONE].totalStaked + poolInfo[PoolType.TWO].totalStaked
+            + poolInfo[PoolType.THREE].totalStaked + poolInfo[PoolType.FOUR].totalStaked;
+
+        if (launchPadToken.balanceOf(address(this)) - totalStaked < _amount) {
+            revert InvalidAmount(_amount);
+        }
+
+        PurrToken(launchPadToken).safeTransfer(msg.sender, _amount);
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getTotalStakedPool()
         external
         view
@@ -315,45 +354,6 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
      */
     function getUserItemId() external view returns (uint256[] memory) {
         return userItemInfo[msg.sender];
-    }
-
-    /**
-     * @inheritdoc IPurrStaking
-     */
-    function addFund(uint256 _amount) external onlyOwner {
-        if (_amount <= 0) {
-            revert InvalidAmount(_amount);
-        }
-
-        PurrToken(launchPadToken).safeTransferFrom(msg.sender, address(this), _amount);
-    }
-
-    /**
-     * @inheritdoc IPurrStaking
-     */
-    function withdrawFund(uint256 _amount) external onlyOwner {
-        uint256 totalStaked = poolInfo[PoolType.ONE].totalStaked + poolInfo[PoolType.TWO].totalStaked
-            + poolInfo[PoolType.THREE].totalStaked + poolInfo[PoolType.FOUR].totalStaked;
-
-        if (totalStaked <= _amount) {
-            revert InvalidAmount(_amount);
-        }
-
-        PurrToken(launchPadToken).safeTransfer(msg.sender, _amount);
-    }
-
-    /**
-     * @inheritdoc IPurrStaking
-     */
-    function pause() external onlyOwner {
-        _pause();
-    }
-
-    /**
-     * @inheritdoc IPurrStaking
-     */
-    function unpause() external onlyOwner {
-        _unpause();
     }
 
     function _calculatePendingReward(UserPoolInfo memory userPool) internal view returns (uint256) {

@@ -7,11 +7,11 @@ import { BaseScript } from "./Base.s.sol";
 import { PurrToken } from "../src/token/PurrToken.sol";
 
 contract DeployPurrTokenScript is BaseScript {
-    PurrToken purr; 
+    PurrToken purr;
 
     function run() public broadcast {
-        purr = new PurrToken(msg.sender, "PurrToken","PLT" );
-        
-        purr.mint(msg.sender, 100000e18);
+        purr = new PurrToken(msg.sender, "PurrToken", "PLT");
+
+        purr.mint(msg.sender, 100_000e18);
     }
 }

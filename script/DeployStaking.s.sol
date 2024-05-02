@@ -8,9 +8,9 @@ import { PurrStaking } from "../src/PurrStaking.sol";
 import { UserPoolInfo, PoolInfo, PoolType, TierType, TierInfo } from "../src/types/PurrStaingType.sol";
 
 contract DeployPurrStakingScript is BaseScript {
-    address purrToken  = 0x2C7468DF2836cE821C48867961556E62D76CA920; 
+    address purrToken = 0x2C7468DF2836cE821C48867961556E62D76CA920;
     PurrStaking purrStaking;
-    
+
     PoolInfo[] poolInfos;
     TierInfo[] tierInfos;
     // mock usd
@@ -21,14 +21,14 @@ contract DeployPurrStakingScript is BaseScript {
         _initTiers();
         purrStaking = new PurrStaking(purrToken, msg.sender, poolInfos, tierInfos);
         ERC20(purrToken).approve(address(purrStaking), 1000e18);
-        purrStaking.stake( 100e18,PoolType.ONE);
-        purrStaking.stake( 100e18,PoolType.TWO);
-        purrStaking.stake( 100e18,PoolType.THREE);
-        purrStaking.stake( 100e18,PoolType.FOUR);
-        purrStaking.unstake( 10e18,4);
+        purrStaking.stake(100e18, PoolType.ONE);
+        purrStaking.stake(100e18, PoolType.TWO);
+        purrStaking.stake(100e18, PoolType.THREE);
+        purrStaking.stake(100e18, PoolType.FOUR);
+        purrStaking.unstake(10e18, 4);
     }
 
-      function _initPools() internal {
+    function _initPools() internal {
         PoolInfo memory pool1 = PoolInfo({
             unstakeFee: 0,
             apy: 900,

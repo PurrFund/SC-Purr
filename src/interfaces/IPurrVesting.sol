@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import { PoolState, Pool, UserPool } from "../types/PurrVestingType.sol";
+import { PoolState, Pool } from "../types/PurrVestingType.sol";
 
 interface IPurrVesting {
     // event list
@@ -17,4 +17,6 @@ interface IPurrVesting {
     error InvalidClaimPercent();
     error InvalidClaimAmount();
     error InvalidFund();
+    error InvalidVestingType();
+    error InvalidArgCreatePool();
 }

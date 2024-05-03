@@ -5,7 +5,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { BaseScript } from "./Base.s.sol";
 import { PurrStaking } from "../src/PurrStaking.sol";
-import { UserPoolInfo, PoolInfo, PoolType, TierType, TierInfo } from "../src/types/PurrStaingType.sol";
+import { PoolInfo, PoolType, TierType, TierInfo } from "../src/types/PurrStaingType.sol";
 
 contract DeployPurrStakingScript is BaseScript {
     address purrToken = 0x2C7468DF2836cE821C48867961556E62D76CA920;

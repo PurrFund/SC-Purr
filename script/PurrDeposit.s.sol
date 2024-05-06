@@ -19,4 +19,12 @@ contract DeployPurrDepositScript is BaseScript {
         purr.deposit(10_000e18);
         purr.withDrawUser(100e18);
     }
+
+    function deposit(address _sender, uint256 _amount) public {
+        vm.startBroadcast(_sender);
+        address _purr = 0x7808FA36E63c8832560876eC934B46D35d090a85;
+        ERC20(usd).approve(_purr, _amount);
+        PurrDeposit(_purr).deposit(_amount);
+        vm.stopBroadcast();
+    }
 }

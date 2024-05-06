@@ -129,22 +129,22 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
     /**
      * @inheritdoc IPurrDeposit
      */
-    function updateBalanceDepositor(address[] calldata _depositorAddresses, uint256[] calldata _amounts) external onlyOwner {
+    function updateBalanceDepositor(address[] calldata _depositorAddresses, uint256[] calldata _lossAmounts) external onlyOwner {
         uint256 depositorLength = _depositorAddresses.length;
-        uint256 amountLength = _amounts.length;
+        uint256 amountLength = _lossAmounts.length;
 
         if (depositorLength != amountLength) {
             revert InvalidArgument();
         }
 
         for (uint256 i; i < depositorLength;) {
-            uint256 _amount = _amounts[i];
+            uint256 _amount = _lossAmounts[i];
 
-            if (depositorInfo[_depositorAddresses[i]] < _amount) {
+            if (_amount > depositorInfo[_depositorAddresses[i]] ) {
                 revert InvalidUpdateAmount(_depositorAddresses[i], _amount);
             }
 
-            depositorInfo[_depositorAddresses[i]] = _amount;
+            depositorInfo[_depositorAddresses[i]] -= _amount;
 
             unchecked {
                 ++i;

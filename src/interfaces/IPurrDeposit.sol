@@ -74,9 +74,9 @@ interface IPurrDeposit {
      * @dev Only owner can call this function.
      *
      * @param _depositorAddresses The array address.
-     * @param  _amounts The array amount.
+     * @param  _lossAmounts The array amount.
      */
-    function updateBalanceDepositor(address[] calldata _depositorAddresses, uint256[] calldata _amounts) external;
+    function updateBalanceDepositor(address[] calldata _depositorAddresses, uint256[] calldata _lossAmounts) external;
 
     /**
      * @notice Turn off withdraw.

@@ -19,4 +19,6 @@ interface IPurrVesting {
     error InvalidFund();
     error InvalidVestingType();
     error InvalidArgCreatePool();
+    error InvalidPoolIndex(uint256 poolId); 
+    error InvalidClaimer(address claimer); 
 }

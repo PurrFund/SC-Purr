@@ -140,7 +140,7 @@ contract PurrDeposit is Ownable, ReentrancyGuard, IPurrDeposit {
         for (uint256 i; i < depositorLength;) {
             uint256 _amount = _lossAmounts[i];
 
-            if (_amount > depositorInfo[_depositorAddresses[i]] ) {
+            if (_amount > depositorInfo[_depositorAddresses[i]]) {
                 revert InvalidUpdateAmount(_depositorAddresses[i], _amount);
             }
 

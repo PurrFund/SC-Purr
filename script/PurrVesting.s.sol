@@ -10,8 +10,8 @@ import { CreatePool, VestingType, PoolState } from "../src/types/PurrVestingType
 contract PurrVestingScript is BaseScript {
     PurrVesting purrVesting;
     address idoMock = 0x9ab93Fe22e82dC098dA674818a74901EB7a9D7A6;
-    uint256[] times;
-    uint256[] percents;
+    uint64[] times;
+    uint16[] percents;
     uint256[] fundAmounts;
     address[] users;
 
@@ -26,10 +26,7 @@ contract PurrVestingScript is BaseScript {
             unlockPercent: 1000,
             linearVestingDuration: 365 days,
             times: times,
-            percents: percents,
-            fundsTotal: 0,
-            fundsClaimed: 0,
-            state: PoolState.INIT
+            percents: percents
         });
 
         purrVesting.createPool(createPool1);

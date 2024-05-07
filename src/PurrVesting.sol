@@ -215,9 +215,10 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
     function start(uint256 _poolId) external onlyOwner {
         Pool storage pool = poolInfo[_poolId];
 
-        if (pool.state != PoolState.INIT || pool.state != PoolState.PAUSE) {
+        if (pool.state != PoolState.INIT && pool.state != PoolState.PAUSE) {
             revert InvalidState(pool.state);
         }
+
         pool.state = PoolState.STARTING;
     }
 
@@ -237,11 +238,49 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
         poolInfo[_poolId].state = PoolState.END;
     }
 
+    function getPendingFund(uint256 _poolId) external whenNotPaused nonReentrant returns (uint256) {
+        Pool storage pool = poolInfo[_poolId];
+        address sender = msg.sender;
+
+        if (pool.state != PoolState.STARTING) {
+            revert InvalidState(pool.state);
+        }
+
+        if (userPoolInfo[_poolId][sender].fund <= 0) {
+            revert InvalidClaimer(sender);
+        }
+
+        if (userPoolInfo[_poolId][sender].fund <= userPoolInfo[_poolId][sender].released) {
+            revert InvalidFund();
+        }
+
+        if (block.timestamp < pool.tge) {
+            revert InvalidTime(block.timestamp);
+        }
+
+        uint256 claimPercent = computeClaimPercent(_poolId, block.timestamp);
+
+        if (claimPercent <= 0) {
+            revert InvalidClaimPercent();
+        }
+
+        uint256 claimTotal =
+            userPoolInfo[_poolId][sender].fund.mulDiv(claimPercent, ONE_HUNDRED_PERCENT_SCALED, Math.Rounding.Floor);
+
+        if (claimTotal < userPoolInfo[_poolId][sender].released) {
+            revert InvalidClaimAmount();
+        }
+
+        uint256 claimAmount = claimTotal - userPoolInfo[_poolId][sender].released;
+
+        return claimAmount;
+    }
+
     function computeClaimPercent(uint256 _poolId, uint256 _now) public view returns (uint256) {
         Pool memory pool = poolInfo[_poolId];
 
-        uint256[] memory times = pool.times;
-        uint256[] memory percents = pool.percents;
+        uint64[] memory times = pool.times;
+        uint16[] memory percents = pool.percents;
 
         uint256 totalPercent = 0;
         uint256 tge = pool.tge;
@@ -282,14 +321,20 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
                 if (_now >= tge + pool.cliff) {
                     uint256 delta = _now - tge - pool.cliff;
 
-                    totalPercent += (delta.mulDiv(ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration));
+                    totalPercent += (
+                        delta.mulDiv(
+                            ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration, Math.Rounding.Floor
+                        )
+                    );
                 }
             }
         } else if (uint8(pool.vestingType) == uint8(VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST)) {
             if (_now >= tge + pool.cliff) {
                 totalPercent += pool.unlockPercent;
                 uint256 delta = _now - tge - pool.cliff;
-                totalPercent += (delta.mulDiv(ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration));
+                totalPercent += (
+                    delta.mulDiv(ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration, Math.Rounding.Floor)
+                );
             }
         }
 
@@ -308,40 +353,11 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
         return (tokenTotal, claimedTotal);
     }
 
-    function getPoolInfo(uint256 _poolId)
-        public
-        view
-        returns (
-            // address,
-            // string memory,
-            // VestingType,
-            // uint256,
-            // uint256,
-            // uint256,
-            // uint256,
-            // uint256[] memory,
-            // uint256[] memory,
-            // uint256,
-            // uint256,
-            // PoolState
-            Pool memory
-        )
-    {
+    function getPoolInfo(uint256 _poolId) public view returns (Pool memory) {
         return poolInfo[_poolId];
+    }
 
-        // return (
-        //     pool.tokenFund,
-        //     pool.name,
-        //     pool.vestingType,
-        //     pool.tge,
-        //     pool.cliff,
-        //     pool.unlockPercent,
-        //     pool.linearVestingDuration,
-        //     pool.times,
-        //     pool.percents,
-        //     pool.fundsTotal,
-        //     pool.fundsClaimed,
-        //     pool.state
-        // );
+    function getUserClaimInfo(uint256 _poolId) external returns (UserPool memory) {
+        return userPoolInfo[_poolId][msg.sender];
     }
 }

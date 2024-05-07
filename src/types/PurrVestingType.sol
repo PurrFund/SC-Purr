@@ -14,8 +14,8 @@ struct Pool {
     uint256 cliff;
     uint256 unlockPercent;
     uint256 linearVestingDuration;
-    uint256[] times;
-    uint256[] percents;
+    uint16[] percents;
+    uint64[] times;
     uint256 fundsTotal;
     uint256 fundsClaimed;
     address tokenFund;
@@ -29,14 +29,11 @@ struct CreatePool {
     uint256 cliff;
     uint256 unlockPercent;
     uint256 linearVestingDuration;
-    uint256[] times;
-    uint256[] percents;
-    uint256 fundsTotal;
-    uint256 fundsClaimed;
+    uint16[] percents;
+    uint64[] times;
     address tokenFund;
     string name;
     VestingType vestingType;
-    PoolState state;
 }
 
 struct UserPool {

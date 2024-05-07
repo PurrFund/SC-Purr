@@ -15,7 +15,7 @@ struct Pool {
     uint256 unlockPercent;
     uint256 linearVestingDuration;
     uint256[] times;
-    uint256[] percens;
+    uint256[] percents;
     uint256 fundsTotal;
     uint256 fundsClaimed;
     address tokenFund;
@@ -30,7 +30,7 @@ struct CreatePool {
     uint256 unlockPercent;
     uint256 linearVestingDuration;
     uint256[] times;
-    uint256[] percens;
+    uint256[] percents;
     uint256 fundsTotal;
     uint256 fundsClaimed;
     address tokenFund;

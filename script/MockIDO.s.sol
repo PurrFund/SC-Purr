@@ -6,6 +6,6 @@ import { ERC20Mock } from "../test/mocks/ERC20Mock.sol";
 
 contract DeployIDOMOCKScript is BaseScript {
     function run() public broadcast {
-        new ERC20Mock("FANX", "FXT");
+        new ERC20Mock("SAKA", "SKT");
     }
 }

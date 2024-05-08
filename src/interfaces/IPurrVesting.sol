@@ -5,7 +5,7 @@ import { PoolState, Pool } from "../types/PurrVestingType.sol";
 
 interface IPurrVesting {
     // event list
-    event CreatePoolEvent(uint256 poolId, Pool pool);
+    event CreatePoolEvent(Pool pool);
     event AddFundEvent(uint256 poolId, address[] user, uint256[] fundAmount);
     event RemoveFundEvent(uint256 poolId, address[] user);
     event ClaimFundEvent(uint256 poolId, address user, uint256 fundClaimed);
@@ -21,4 +21,8 @@ interface IPurrVesting {
     error InvalidArgCreatePool();
     error InvalidPoolIndex(uint256 poolId);
     error InvalidClaimer(address claimer);
+    error InvalidArgPercentCreatePool();
+    error InvalidArgMileStoneCreatePool();
+    error InvalidArgTotalPercentCreatePool();
+    error InvalidArgLinearCreatePool();
 }

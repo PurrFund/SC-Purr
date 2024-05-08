@@ -10,6 +10,7 @@ enum PoolState {
 
 struct Pool {
     uint256 id;
+    string projectId;
     uint256 tge;
     uint256 cliff;
     uint256 unlockPercent;
@@ -25,6 +26,7 @@ struct Pool {
 }
 
 struct CreatePool {
+    string projectId;
     uint256 tge;
     uint256 cliff;
     uint256 unlockPercent;

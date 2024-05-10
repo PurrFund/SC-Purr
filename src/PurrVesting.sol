@@ -267,24 +267,27 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
         Pool memory pool = poolInfo[_poolId];
 
         if (pool.state != PoolState.STARTING || block.timestamp < pool.tge) {
-            return 0; 
+            return 0;
         }
 
-        if (userPoolInfo[_poolId][_claimer].fund <= 0 || userPoolInfo[_poolId][_claimer].fund <= userPoolInfo[_poolId][_claimer].released) {
-            return 0; 
+        if (
+            userPoolInfo[_poolId][_claimer].fund <= 0
+                || userPoolInfo[_poolId][_claimer].fund <= userPoolInfo[_poolId][_claimer].released
+        ) {
+            return 0;
         }
 
         uint256 claimPercent = _calculateClaimPercent(_poolId, block.timestamp);
 
         if (claimPercent <= 0) {
-            return 0; 
+            return 0;
         }
 
         uint256 claimTotal =
             userPoolInfo[_poolId][_claimer].fund.mulDiv(claimPercent, ONE_HUNDRED_PERCENT_SCALED, Math.Rounding.Floor);
 
         if (claimTotal < userPoolInfo[_poolId][_claimer].released) {
-            return 0; 
+            return 0;
         }
 
         uint256 claimAmount = claimTotal - userPoolInfo[_poolId][_claimer].released;
@@ -315,10 +318,10 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
 
     /**
      * @dev Calculate claim percent base on {_now}.
-     * 
-     * @param _poolId The poolId onchain 
-     * @param _now The mark to set. 
-     * 
+     *
+     * @param _poolId The poolId onchain
+     * @param _now The mark to set.
+     *
      * @return The claim percent base on {_now}.
      */
     function _calculateClaimPercent(uint256 _poolId, uint256 _now) internal view returns (uint256) {

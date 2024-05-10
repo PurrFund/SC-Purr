@@ -5,7 +5,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { BaseScript } from "./Base.s.sol";
 import { PurrVesting } from "../src/PurrVesting.sol";
-import { CreatePool, VestingType, PoolState } from "../src/types/PurrVestingType.sol";
+import { CreatePool, VestingType } from "../src/types/PurrVestingType.sol";
 
 contract PurrVestingScript is BaseScript {
     PurrVesting purrVesting;

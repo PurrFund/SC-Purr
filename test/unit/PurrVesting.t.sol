@@ -9,8 +9,6 @@ import { PoolState, Pool, UserPool, CreatePool } from "../../src/types/PurrVesti
 import { ERC20Mock } from "../mocks/ERC20Mock.sol";
 import { VestingType } from "../../src/types/PurrVestingType.sol";
 
-import { console } from "forge-std/console.sol";
-
 contract PurrVestingTest is BaseTest {
     using Math for uint256;
 
@@ -541,9 +539,6 @@ contract PurrVestingTest is BaseTest {
         purrVesting.start(poolId);
 
         vm.stopPrank();
-
-        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
-        uint256 prePoolFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
 
         vm.warp(createPool.tge + createPool.cliff);
         uint256 pendingReward = purrVesting.getPendingFund(poolId, users.alice);

@@ -5,7 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { LaunchPool, LaunchPad, PreProject, Project } from "./types/PurrLaunchPadType.sol";
+import { LaunchPool, LaunchPad, PreProject, Project, VestingType } from "./types/PurrLaunchPadType.sol";
 import { IPurrLaunchPad } from "./interfaces/IPurrLaunchPad.sol";
 
 /**
@@ -14,6 +14,7 @@ import { IPurrLaunchPad } from "./interfaces/IPurrLaunchPad.sol";
 contract PurrLaunchPad is Ownable, IPurrLaunchPad {
     using SafeERC20 for IERC20;
 
+    uint256 public constant ONE_HUNDRED_PERCENT_SCALED = 10_000;
     uint64 public projectId;
 
     mapping(uint64 projectId => Project project) public projectInfo;
@@ -33,6 +34,9 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         external
         onlyOwner
     {
+        _validateLaunchPad(_launchPad);
+        _validateLaunchPool(_launchPool);
+
         ++projectId;
         projectInfo[projectId] = Project({
             id: projectId,
@@ -63,6 +67,9 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         external
         onlyOwner
     {
+        _validateLaunchPad(_launchPad);
+        _validateLaunchPool(_launchPool);
+
         projectInfo[_projectId] = Project({
             id: _projectId,
             owner: _project.owner,
@@ -78,5 +85,108 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         launchPadInfo[projectId] = _launchPad;
 
         emit UpdateProject(projectInfo[projectId], _launchPad, _launchPool);
+    }
+
+    function _validateLaunchPad(LaunchPad memory _launchPad) public pure {
+        if (uint8(_launchPad.typeVesting) > 3) {
+            revert InvalidVestingType();
+        }
+
+        if (
+            _launchPad.tge < _launchPad.vestingTime || _launchPad.unlockPercent < 0
+                || _launchPad.unlockPercent > ONE_HUNDRED_PERCENT_SCALED || _launchPad.cliffTime < 0
+        ) {
+            revert InvalidArgPercentCreatePool();
+        }
+
+        if (
+            uint8(_launchPad.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)
+                || uint8(_launchPad.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)
+        ) {
+            if (
+                _launchPad.times.length != _launchPad.percents.length || _launchPad.times.length < 0 || _launchPad.linearTime != 0
+            ) {
+                revert InvalidArgCreatePool();
+            }
+
+            uint256 total = _launchPad.unlockPercent;
+            uint256 curTime = 0;
+
+            for (uint256 i; i < _launchPad.times.length;) {
+                total = total + _launchPad.percents[i];
+                uint256 tmpTime = _launchPad.times[i];
+
+                if (tmpTime < _launchPad.tge + _launchPad.cliffTime || tmpTime <= curTime) {
+                    revert InvalidArgMileStoneCreatePool();
+                }
+
+                curTime = tmpTime;
+
+                unchecked {
+                    ++i;
+                }
+            }
+
+            if (total != ONE_HUNDRED_PERCENT_SCALED) {
+                revert InvalidArgTotalPercentCreatePool();
+            }
+        } else {
+            if (_launchPad.times.length != 0 || _launchPad.percents.length != 0 || _launchPad.linearTime <= 0) {
+                revert InvalidArgLinearCreatePool();
+            }
+        }
+    }
+
+    function _validateLaunchPool(LaunchPool memory _launchPool) public pure {
+        if (_launchPool.startTime > 0) {
+            if (uint8(_launchPool.typeVesting) > 3) {
+                revert InvalidVestingType();
+            }
+
+            if (
+                _launchPool.tge < _launchPool.vestingTime || _launchPool.unlockPercent < 0
+                    || _launchPool.unlockPercent > ONE_HUNDRED_PERCENT_SCALED || _launchPool.cliffTime < 0
+            ) {
+                revert InvalidArgPercentCreatePool();
+            }
+
+            if (
+                uint8(_launchPool.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)
+                    || uint8(_launchPool.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)
+            ) {
+                if (
+                    _launchPool.times.length != _launchPool.percents.length || _launchPool.times.length < 0
+                        || _launchPool.linearTime != 0
+                ) {
+                    revert InvalidArgCreatePool();
+                }
+
+                uint256 total = _launchPool.unlockPercent;
+                uint256 curTime = 0;
+
+                for (uint256 i; i < _launchPool.times.length;) {
+                    total = total + _launchPool.percents[i];
+                    uint256 tmpTime = _launchPool.times[i];
+
+                    if (tmpTime < _launchPool.tge + _launchPool.cliffTime || tmpTime <= curTime) {
+                        revert InvalidArgMileStoneCreatePool();
+                    }
+
+                    curTime = tmpTime;
+
+                    unchecked {
+                        ++i;
+                    }
+                }
+
+                if (total != ONE_HUNDRED_PERCENT_SCALED) {
+                    revert InvalidArgTotalPercentCreatePool();
+                }
+            } else {
+                if (_launchPool.times.length != 0 || _launchPool.percents.length != 0 || _launchPool.linearTime <= 0) {
+                    revert InvalidArgLinearCreatePool();
+                }
+            }
+        }
     }
 }

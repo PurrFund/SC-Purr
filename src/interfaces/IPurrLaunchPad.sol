@@ -9,6 +9,14 @@ interface IPurrLaunchPad {
     event CreateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
     event UpdateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
 
+    // error list
+    error InvalidArgCreatePool();
+    error InvalidArgMileStoneCreatePool();
+    error InvalidArgTotalPercentCreatePool();
+    error InvalidArgLinearCreatePool();
+    error InvalidVestingType();
+    error InvalidArgPercentCreatePool();
+
     /**
      * @notice Create new project.
      *

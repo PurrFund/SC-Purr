@@ -12,7 +12,7 @@ contract PurrDepositTest is BaseTest {
 
     event Deposit(address indexed receiver, uint256 amount, uint256 timeDeposit);
     event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
-    event UpdatePoolDeposit(bool canWithDraw);
+    event UpdatePoolDeposit(bool canWithDrawAndDeposit);
     event WithDrawUser(address indexed sender, uint256 amount, uint256 timeWithDraw);
     event UpdateBalanceDepositor();
     event SetUsd(address usd);
@@ -39,8 +39,8 @@ contract PurrDepositTest is BaseTest {
         assertEq(users.subAdmin, purrDeposit.subAdmin());
     }
 
-    function test_Deploy_ShouldRight_CanWithDraw() public view {
-        assertEq(true, purrDeposit.canWithDraw());
+    function test_Deploy_ShouldRight_CanWithDrawAndDeposit() public view {
+        assertEq(true, purrDeposit.canWithDrawAndDeposit());
     }
 
     function test_Deploy_ShouldRight_Usd() public view {
@@ -63,6 +63,20 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.deposit(20);
     }
 
+    function test_Deposit_ShouldRevert_WhenCanNotDeposit() public {
+        vm.startPrank(users.subAdmin);
+        purrDeposit.turnOffWithDrawAndDeposit();
+
+        uint256 amountDeposit = 10e18;
+
+        vm.startPrank(users.alice);
+        usd.approve(address(purrDeposit), amountDeposit);
+        bytes4 selector = bytes4(keccak256("CanNotDeposit()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+        purrDeposit.deposit(amountDeposit);
+        vm.stopPrank();
+    }
+
     function test_Deposit_ShouldDeposited() public {
         uint256 prePurrBL = usd.balanceOf(address(purrDeposit));
         uint256 preAliceBL = usd.balanceOf(users.alice);
@@ -81,6 +95,7 @@ contract PurrDepositTest is BaseTest {
         assertEq(prePurrBL + amountDeposit, posPurrBL);
         assertEq(preAliceBL - amountDeposit, posAliceBL);
         assertEq(preAliceBLPurr + amountDeposit, posAliceBLPurr);
+        assertEq(purrDeposit.totalDeposit(), amountDeposit);
     }
 
     function test_Deposit_ShouldEmit_EventDeposit() public {
@@ -191,7 +206,7 @@ contract PurrDepositTest is BaseTest {
 
     function test_WithDrawUser_ShouldReVert_WhenCanNotWithDraw() public {
         vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
 
         bytes4 selector = bytes4(keccak256("CanNotWithDraw()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
@@ -278,6 +293,7 @@ contract PurrDepositTest is BaseTest {
         assertEq(purrDeposit.depositorInfo(users.alice), amountDeposit - amountWithDraw);
         assertEq(posBalanceAlice - preBalanceAlice, amountDeposit - amountWithDraw);
         assertEq(posBalancePurrDeposit, amountAddFund + amountDeposit - amountWithDraw);
+        assertEq(purrDeposit.totalDeposit(), amountDeposit - amountWithDraw);
     }
 
     function test_WithDrawUser_ShouldEmit_EventWithDrawUser() public {
@@ -302,6 +318,29 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.withDrawUser(amountWithDraw);
     }
 
+    function test_UpdateBalanceDepositor_ShouldRevert_WhenInvalidActiveStatus() public {
+        uint256 length = 20;
+
+        for (uint256 i; i < length;) {
+            address iAddress = vm.addr(i + 1);
+            _deal(iAddress, i + 1);
+            depositorAddresses.push(address(iAddress));
+            amounts.push(i);
+            vm.startPrank(iAddress);
+            usd.approve(address(purrDeposit), i + 1);
+            purrDeposit.deposit(i + 1);
+            vm.stopPrank();
+            unchecked {
+                ++i;
+            }
+        }
+        bytes4 selector = bytes4(keccak256("InvalidActiveStatus()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
+    }
+
     function test_UpdateBalanceDepositor_ShouldRevert_WhenNotOwner() public {
         depositorAddresses.push(address(1));
         amounts.push(10);
@@ -317,6 +356,8 @@ contract PurrDepositTest is BaseTest {
         depositorAddresses.push(address(1));
         amounts.push(10);
         amounts.push(20);
+        vm.prank(users.subAdmin);
+        purrDeposit.turnOffWithDrawAndDeposit();
 
         bytes4 selector = bytes4(keccak256("InvalidArgument()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
@@ -325,45 +366,56 @@ contract PurrDepositTest is BaseTest {
         purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
     }
 
-    // function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public {
-    //     uint256 length = 20_000;
+    function test_UpdateBalanceDepositor_ShouldUpdateBalanceDepositored() public {
+        uint256 length = 20;
+        uint256 totalVestedAmount;
 
-    //     for (uint256 i; i < length;) {
-    //         address iAddress = vm.addr(i + 1);
-    //         _deal(iAddress, i + 1);
-    //         depositorAddresses.push(address(iAddress));
-    //         amounts.push(i);
-    //         vm.startPrank(iAddress);
-    //         usd.approve(address(purrDeposit), i + 1);
-    //         purrDeposit.deposit(i + 1);
-    //         vm.stopPrank();
-    //         unchecked {
-    //             ++i;
-    //         }
-    //     }
+        for (uint256 i; i < length;) {
+            address iAddress = vm.addr(i + 1);
+            _deal(iAddress, i + 1);
+            depositorAddresses.push(address(iAddress));
+            amounts.push(i);
+            totalVestedAmount += i;
+            vm.startPrank(iAddress);
+            usd.approve(address(purrDeposit), i + 1);
+            purrDeposit.deposit(i + 1);
+            vm.stopPrank();
+            unchecked {
+                ++i;
+            }
+        }
 
-    //     vm.prank(users.admin);
-    //     purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
+        uint256 preTotalDeposit = purrDeposit.totalDeposit();
 
-    //     uint256 depositLength = depositorAddresses.length;
-    //     for (uint256 i; i < depositLength; ++i) {
-    //         assertEq(purrDeposit.depositorInfo(depositorAddresses[i]), amounts[i]);
-    //     }
-    // }
+        vm.prank(users.subAdmin);
+        purrDeposit.turnOffWithDrawAndDeposit();
+
+        vm.prank(users.admin);
+        purrDeposit.updateBalanceDepositor(depositorAddresses, amounts);
+
+        uint256 depositLength = depositorAddresses.length;
+        for (uint256 i; i < depositLength; ++i) {
+            assertEq(purrDeposit.depositorInfo(depositorAddresses[i]), 1);
+        }
+
+        uint256 posTotalDeposit = purrDeposit.totalDeposit();
+
+        assertEq(preTotalDeposit - totalVestedAmount, posTotalDeposit);
+    }
 
     function test_TurnOffWithDraw_ShouldRevert_NotSubAdmin() public {
         bytes4 selector = bytes4(keccak256("InvalidSubAdmin(address)"));
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
         vm.prank(users.alice);
-        purrDeposit.turnOffWithDraw();
+        purrDeposit.turnOffWithDrawAndDeposit();
     }
 
     function test_TurnOffWithDraw_ShouldTurnOffWithDrawed() public {
         vm.prank(users.subAdmin);
-        purrDeposit.turnOffWithDraw();
+        purrDeposit.turnOffWithDrawAndDeposit();
 
-        assertEq(purrDeposit.canWithDraw(), false);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), false);
     }
 
     function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public {
@@ -371,14 +423,14 @@ contract PurrDepositTest is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
         vm.prank(users.alice);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
     }
 
     function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDrawed() public {
         vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
 
-        assertEq(purrDeposit.canWithDraw(), false);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), false);
     }
 
     function test_SetUsd_ShouldRevert_NotOwner() public {
@@ -442,9 +494,9 @@ contract PurrDepositTest is BaseTest {
         assertEq(purrDeposit.owner(), users.bob);
 
         vm.prank(users.bob);
-        purrDeposit.updateStatusWithDraw(true);
+        purrDeposit.updateStatusWithDrawAndDeposit(true);
 
-        assertEq(purrDeposit.canWithDraw(), true);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), true);
     }
 
     function _deal(address _reciever, uint256 _amount) internal {

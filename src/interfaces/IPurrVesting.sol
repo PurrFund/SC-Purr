@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { PoolState, Pool, CreatePool, UserPool } from "../types/PurrVestingType.sol";
@@ -147,4 +147,20 @@ interface IPurrVesting {
      * @return The user infomation belong pool with {_poolId}.
      */
     function getUserClaimInfo(uint256 _poolId, address _user) external returns (UserPool memory);
+
+    /**
+     * @notice Pause stake, unstake, claim feature on contract.
+     *
+     * Requirements:
+     *   - Sender must be owner.
+     */
+    function pauseSystem() external;
+
+    /**
+     * @notice Unpause stake, unstake, claim feature on contract.
+     *
+     * Requirements:
+     *   - Sender must be owner.
+     */
+    function unpauseSystem() external;
 }

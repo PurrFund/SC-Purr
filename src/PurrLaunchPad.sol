@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -21,7 +21,10 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
     mapping(uint64 projectId => LaunchPool launchPool) public launchPoolInfo;
     mapping(uint64 projectId => LaunchPad launchPad) public launchPadInfo;
 
-    constructor(address initialOwner) Ownable(initialOwner) { }
+    /**
+     * @param _initialOwner The initial owner.
+     */
+    constructor(address _initialOwner) Ownable(_initialOwner) { }
 
     /**
      * @inheritdoc IPurrLaunchPad
@@ -87,6 +90,18 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         emit UpdateProject(projectInfo[projectId], _launchPad, _launchPool);
     }
 
+    /**
+     * @inheritdoc IPurrLaunchPad
+     */
+    function getProjectInfo(uint64 _projectId) external view returns (Project memory, LaunchPad memory, LaunchPool memory) {
+        return (projectInfo[_projectId], launchPadInfo[projectId], launchPoolInfo[projectId]);
+    }
+
+    /**
+     * @dev Validate {_launchPad} field.
+     *
+     * @param _launchPad The launchpad information.
+     */
     function _validateLaunchPad(LaunchPad memory _launchPad) public pure {
         if (uint8(_launchPad.typeVesting) > 3) {
             revert InvalidVestingType();
@@ -137,6 +152,11 @@ contract PurrLaunchPad is Ownable, IPurrLaunchPad {
         }
     }
 
+    /**
+     * @dev Validate {_launchPool} field if exist.
+     *
+     * @param _launchPool The launchpool information.
+     */
     function _validateLaunchPool(LaunchPool memory _launchPool) public pure {
         if (_launchPool.startTime > 0) {
             if (uint8(_launchPool.typeVesting) > 3) {

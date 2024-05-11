@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
@@ -14,7 +14,7 @@ import { PurrToken } from "./token/PurrToken.sol";
 /**
  * @notice PurrStaking contract.
  */
-contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
+contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
     using SafeERC20 for PurrToken;
     using Math for uint256;
 

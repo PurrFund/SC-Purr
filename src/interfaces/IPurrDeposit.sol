@@ -1,4 +1,4 @@
-// SPDX-License-Identier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 interface IPurrDeposit {
@@ -15,8 +15,11 @@ interface IPurrDeposit {
     error InvalidSubAdmin(address subAdmin);
     error InvalidRootAdmin(address rootAdmin);
     error CanNotWithDraw();
+    error CanNotDeposit();
     error InvalidArgument();
     error InvalidUpdateAmount(address depositor, uint256 amount);
+    error InvalidInvestedAmount();
+    error InvalidActiveStatus();
 
     /**
      * @notice Deposit usd.
@@ -85,7 +88,7 @@ interface IPurrDeposit {
      * @dev User can withdraw when snapshot time end.
      * @dev Only subadmin can call this function.
      */
-    function turnOffWithDraw() external;
+    function turnOffWithDrawAndDeposit() external;
 
     /**
      * @notice Update withdraw status.
@@ -93,9 +96,9 @@ interface IPurrDeposit {
      * @dev We will update withdraw status.
      * @dev Only owner can call this function.
      *
-     * @param _canWithDraw The _canWithDraw staus.
+     * @param _canWithDrawAndDeposit The _canWithDraw staus.
      */
-    function updateStatusWithDraw(bool _canWithDraw) external;
+    function updateStatusWithDrawAndDeposit(bool _canWithDrawAndDeposit) external;
 
     /**
      * @notice Update usd address.
@@ -113,7 +116,33 @@ interface IPurrDeposit {
      * @dev We will update rootadmin address.
      * @dev Only rootadmin can call this function.
      *
-     * @param rootAdmin_ The rootAdmin address.
+     * @param _rootAdmin The rootAdmin address.
      */
-    function setRootAdmin(address rootAdmin_) external;
+    function setRootAdmin(address _rootAdmin) external;
+
+    /**
+     * @notice Update sub-admin address.
+     *
+     * @dev We will update sub-admin address.
+     * @dev Only owner can call this function.
+     *
+     * @param _subAdmin The sub-admin address.
+     */
+    function setSubAdmin(address _subAdmin) external;
+
+    /**
+     * @notice Pause stake, unstake, claim feature on contract.
+     *
+     * Requirements:
+     *   - Sender must be owner.
+     */
+    function pause() external;
+
+    /**
+     * @notice Unpause stake, unstake, claim feature on contract.
+     *
+     * Requirements:
+     *   - Sender must be owner.
+     */
+    function unpause() external;
 }

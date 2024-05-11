@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -242,10 +242,6 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
      * @inheritdoc IPurrVesting
      */
     function pause(uint256 _poolId) external onlyOwner {
-        if (poolInfo[_poolId].state == PoolState.PAUSE) {
-            revert InvalidState(poolInfo[_poolId].state);
-        }
-
         poolInfo[_poolId].state = PoolState.PAUSE;
     }
 
@@ -253,17 +249,27 @@ contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
      * @inheritdoc IPurrVesting
      */
     function end(uint256 _poolId) external nonReentrant onlyOwner {
-        if (poolInfo[_poolId].state != PoolState.PAUSE) {
-            revert InvalidState(poolInfo[_poolId].state);
-        }
-
         poolInfo[_poolId].state = PoolState.END;
     }
 
     /**
      * @inheritdoc IPurrVesting
      */
-    function getPendingFund(uint256 _poolId, address _claimer) external view whenNotPaused returns (uint256) {
+    function pauseSystem() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function unpauseSystem() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function getPendingFund(uint256 _poolId, address _claimer) external view returns (uint256) {
         Pool memory pool = poolInfo[_poolId];
 
         if (pool.state != PoolState.STARTING || block.timestamp < pool.tge) {

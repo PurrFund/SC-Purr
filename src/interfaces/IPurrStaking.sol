@@ -1,4 +1,4 @@
-// SPDX-License-Identifer: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { PoolType, PoolInfo, TierInfo } from "../types/PurrStaingType.sol";
@@ -14,12 +14,12 @@ interface IPurrStaking {
         uint64 end,
         PoolType poolType
     );
-    event UnStake(address indexed staker, uint256 unStakeAmount, uint256 lossPoint, uint64 time, PoolType pool);
-    event ClaimReward(address indexed claimer, uint256 amount, uint64 claimAt);
+    event UnStake(address indexed staker, uint256 itemId, uint256 unStakeAmount, uint256 lossPoint, uint64 time, PoolType pool);
+    event ClaimReward(address indexed claimer, uint256 itemId, uint256 amount, uint64 claimAt);
     event UpdatePool(PoolInfo pool);
     event UpdateTier(TierInfo tier);
-    event ClaimUnstakePoolOne(address staker, uint256 amount, uint64 claimTime);
-    event ClaimPendingReward(address staker, uint256 amount, uint64 claimTime);
+    event ClaimUnstakePoolOne(address staker, uint256 itemId, uint256 amount, uint64 claimTime);
+    event ClaimPendingReward(address staker, uint256 itemId, uint256 amount, uint64 claimTime);
 
     // error list
     error InsufficientAmount(uint256 amount);
@@ -136,17 +136,26 @@ interface IPurrStaking {
     /**
      * @notice Get staker's analysis staking system.
      *
+     * @param _user The user's address
+     *
      * @return totalStaked The total amount of sender.
      * @return totalPoint The total amount point of sender.
+     * @return totalReward The total reward of sender.
+     * @return balance The total current balance launchpad token of sender.
      */
-    function getUserTotalStaked() external view returns (uint256 totalStaked, uint256 totalPoint);
+    function getUserTotalStaked(address _user)
+        external
+        view
+        returns (uint256 totalStaked, uint256 totalPoint, uint256 totalReward, uint256 balance);
 
     /**
      * @notice Get list staker's itemId.
      *
+     * @param _user The user's address
+     *
      * @return The list staker's itemId.
      */
-    function getUserItemId() external view returns (uint256[] memory);
+    function getUserItemId(address _user) external view returns (uint256[] memory);
 
     /**
      * @notice Add fund to contract.

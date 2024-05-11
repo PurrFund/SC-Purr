@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
@@ -14,7 +14,7 @@ import { PurrToken } from "./token/PurrToken.sol";
 /**
  * @notice PurrStaking contract.
  */
-contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
+contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
     using SafeERC20 for PurrToken;
     using Math for uint256;
 
@@ -170,7 +170,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
             }
         }
 
-        emit UnStake(sender, _amount, prePPoint - userPool.pPoint, uint64(block.timestamp), poolType);
+        emit UnStake(sender, _itemId, _amount, prePPoint - userPool.pPoint, uint64(block.timestamp), poolType);
     }
 
     /**
@@ -204,7 +204,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
             delete itemIdIndexInfo[itemId];
         }
 
-        emit ClaimUnstakePoolOne(sender, userPool.amountAvailable, uint64(block.timestamp));
+        emit ClaimUnstakePoolOne(sender, _itemId, userPool.amountAvailable, uint64(block.timestamp));
 
         userPool.amountAvailable = 0;
         userPool.timeUnstaked = 0;
@@ -239,7 +239,7 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
 
         PurrToken(launchPadToken).safeTransfer(sender, reward);
 
-        emit ClaimPendingReward(sender, reward, uint64(block.timestamp));
+        emit ClaimPendingReward(sender, _itemId, reward, uint64(block.timestamp));
     }
 
     /**
@@ -333,27 +333,33 @@ contract PurrStaking is IPurrStaking, Ownable, ReentrancyGuard, Pausable {
     /**
      * @inheritdoc IPurrStaking
      */
-    function getUserTotalStaked() external view returns (uint256 totalStaked, uint256 totalPoint) {
-        uint256[] memory itemIds = userItemInfo[msg.sender];
+    function getUserTotalStaked(address _user)
+        external
+        view
+        returns (uint256 totalStaked, uint256 totalPoint, uint256 totalReward, uint256 balance)
+    {
+        uint256[] memory itemIds = userItemInfo[_user];
         uint256 length = itemIds.length;
+        balance = launchPadToken.balanceOf(_user);
 
         for (uint256 i; i < length;) {
             totalStaked += userPoolInfo[itemIds[i]].stakedAmount;
             totalPoint += userPoolInfo[itemIds[i]].pPoint;
+            totalReward += _calculatePendingReward(userPoolInfo[itemIds[i]]);
 
             unchecked {
                 ++i;
             }
         }
 
-        return (totalStaked, totalPoint);
+        return (totalStaked, totalPoint, totalReward, balance);
     }
 
     /**
      * @inheritdoc IPurrStaking
      */
-    function getUserItemId() external view returns (uint256[] memory) {
-        return userItemInfo[msg.sender];
+    function getUserItemId(address _user) external view returns (uint256[] memory) {
+        return userItemInfo[_user];
     }
 
     function _calculatePendingReward(UserPoolInfo memory userPool) internal view returns (uint256) {

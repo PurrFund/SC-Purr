@@ -38,4 +38,10 @@ abstract contract BaseScript is Script {
         _;
         vm.stopBroadcast();
     }
+
+    modifier broadcastCustom(address user) {
+        vm.startBroadcast(user);
+        _;
+        vm.stopBroadcast();
+    }
 }

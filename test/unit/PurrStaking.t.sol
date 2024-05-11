@@ -28,11 +28,12 @@ contract PurrStakingTest is BaseTest {
         uint64 end,
         PoolType poolType
     );
-    event UnStake(address indexed staker, uint256 unStakeAmount, uint256 lossPoint, uint64 time, PoolType pool);
+    event UnStake(address indexed staker, uint256 itemId, uint256 unStakeAmount, uint256 lossPoint, uint64 time, PoolType pool);
+    event ClaimReward(address indexed claimer, uint256 itemId, uint256 amount, uint64 claimAt);
     event UpdatePool(PoolInfo pool);
     event UpdateTier(TierInfo tier);
-    event ClaimUnstakePoolOne(address staker, uint256 amount, uint64 claimTime);
-    event ClaimPendingReward(address staker, uint256 amount, uint64 claimTime);
+    event ClaimUnstakePoolOne(address staker, uint256 itemId, uint256 amount, uint64 claimTime);
+    event ClaimPendingReward(address staker, uint256 itemId, uint256 amount, uint64 claimTime);
 
     function setUp() public {
         _initPools();
@@ -98,7 +99,7 @@ contract PurrStakingTest is BaseTest {
         assertEq(stakedAmount, amount);
         assertEq(uint8(poolType), uint8(PoolType.THREE));
         vm.prank(users.alice);
-        assertEq(purrStaking.getUserItemId()[0], 1);
+        assertEq(purrStaking.getUserItemId(users.alice)[0], 1);
         assertEq(launchPadToken.balanceOf(users.alice), initBalance - amount);
         uint256 posPurrBL = amount + initBalance;
         assertEq(launchPadToken.balanceOf(address(purrStaking)), posPurrBL);
@@ -514,7 +515,7 @@ contract PurrStakingTest is BaseTest {
         vm.warp(nextTimeStamp);
 
         vm.expectEmit(true, true, true, true);
-        emit UnStake(users.alice, amountUnstake, (amountUnstake * multiplier) / 10, uint64(block.timestamp), PoolType.TWO);
+        emit UnStake(users.alice, 1, amountUnstake, (amountUnstake * multiplier) / 10, uint64(block.timestamp), PoolType.TWO);
 
         vm.prank(users.alice);
         purrStaking.unstake(amountUnstake, itemId);
@@ -882,7 +883,7 @@ contract PurrStakingTest is BaseTest {
         vm.warp(nextTimeStamp);
 
         vm.expectEmit(true, true, true, true);
-        emit UnStake(users.alice, amountUnstake, (amountUnstake * multiplier) / 10, uint64(block.timestamp), PoolType.ONE);
+        emit UnStake(users.alice, 1, amountUnstake, (amountUnstake * multiplier) / 10, uint64(block.timestamp), PoolType.ONE);
 
         vm.prank(users.alice);
         purrStaking.unstake(amountUnstake, itemId);
@@ -1122,7 +1123,7 @@ contract PurrStakingTest is BaseTest {
         vm.warp(claimTime);
 
         vm.expectEmit(true, true, true, true);
-        emit ClaimUnstakePoolOne(users.alice, preAmountAvailable, uint64(block.timestamp));
+        emit ClaimUnstakePoolOne(users.alice, 1, preAmountAvailable, uint64(block.timestamp));
 
         vm.prank(users.alice);
         purrStaking.claimUnstakePoolOne(itemId);
@@ -1313,7 +1314,7 @@ contract PurrStakingTest is BaseTest {
         uint256 currentPendingReward = purrStaking.getPendingReward(1);
 
         vm.expectEmit(true, true, true, true);
-        emit ClaimPendingReward(users.alice, currentPendingReward, uint64(block.timestamp));
+        emit ClaimPendingReward(users.alice, 1, currentPendingReward, uint64(block.timestamp));
 
         vm.prank(users.alice);
         purrStaking.claimReward(itemId);
@@ -1609,7 +1610,7 @@ contract PurrStakingTest is BaseTest {
         launchPadToken.approve(address(purrStaking), amount4);
         purrStaking.stake(amount4, PoolType.FOUR);
 
-        (uint256 actualTotalStake, uint256 actualPoint) = purrStaking.getUserTotalStaked();
+        (uint256 actualTotalStake, uint256 actualPoint,,) = purrStaking.getUserTotalStaked(users.alice);
         vm.stopPrank();
 
         (,, uint16 multiplier1,,,,,) = purrStaking.poolInfo(PoolType.ONE);
@@ -1641,7 +1642,7 @@ contract PurrStakingTest is BaseTest {
 
         launchPadToken.approve(address(purrStaking), amount);
         purrStaking.stake(amount, PoolType.ONE);
-        uint256[] memory actualItemIds = purrStaking.getUserItemId();
+        uint256[] memory actualItemIds = purrStaking.getUserItemId(users.alice);
 
         vm.stopPrank();
         itemIds.push(1);

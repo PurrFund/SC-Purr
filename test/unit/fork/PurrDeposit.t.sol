@@ -21,7 +21,7 @@ contract ForkPurrDeposit is BaseTest {
 
     event Deposit(address indexed receiver, uint256 amount, uint256 timeDeposit);
     event WithDrawRootAdmin(address indexed sender, address indexed receiver, uint256 amount);
-    event UpdatePoolDeposit(bool canWithDraw);
+    event UpdatePoolDeposit(bool canWithDrawAndDeposit);
     event WithDrawUser(address indexed sender, uint256 amount, uint256 timeWithDraw);
     event UpdateBalanceDepositor();
     event SetUsd(address usd);
@@ -55,8 +55,8 @@ contract ForkPurrDeposit is BaseTest {
         assertEq(users.subAdmin, purrDeposit.subAdmin());
     }
 
-    function test_Deploy_ShouldRight_CanWithDraw() public setFork(fork) {
-        assertEq(true, purrDeposit.canWithDraw());
+    function test_Deploy_ShouldRight_CanWithDrawAndDeposit() public setFork(fork) {
+        assertEq(true, purrDeposit.canWithDrawAndDeposit());
     }
 
     function test_Deploy_ShouldRight_Usd() public setFork(fork) {
@@ -206,7 +206,7 @@ contract ForkPurrDeposit is BaseTest {
 
     function test_WithDrawUser_ShouldReVert_WhenCanNotWithDraw() public setFork(fork) {
         vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
 
         bytes4 selector = bytes4(keccak256("CanNotWithDraw()"));
         vm.expectRevert(abi.encodeWithSelector(selector));
@@ -371,14 +371,14 @@ contract ForkPurrDeposit is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
         vm.prank(users.alice);
-        purrDeposit.turnOffWithDraw();
+        purrDeposit.turnOffWithDrawAndDeposit();
     }
 
     function test_TurnOffWithDraw_ShouldTurnOffWithDrawed() public setFork(fork) {
         vm.prank(users.subAdmin);
-        purrDeposit.turnOffWithDraw();
+        purrDeposit.turnOffWithDrawAndDeposit();
 
-        assertEq(purrDeposit.canWithDraw(), false);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), false);
     }
 
     function test_UpdateStatusWithDraw_ShouldRevert_WhenNotOwner() public setFork(fork) {
@@ -386,14 +386,14 @@ contract ForkPurrDeposit is BaseTest {
         vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
         vm.prank(users.alice);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
     }
 
     function test_UpdateStatusWithDraw_ShouldUpdateStatusWithDrawed() public setFork(fork) {
         vm.prank(users.admin);
-        purrDeposit.updateStatusWithDraw(false);
+        purrDeposit.updateStatusWithDrawAndDeposit(false);
 
-        assertEq(purrDeposit.canWithDraw(), false);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), false);
     }
 
     function test_SetUsd_ShouldRevert_NotOwner() public setFork(fork) {
@@ -421,9 +421,24 @@ contract ForkPurrDeposit is BaseTest {
 
     function test_SetRootAdmin_ShouldSetRootAdmined() public setFork(fork) {
         vm.prank(users.rootAdmin);
-        purrDeposit.setRootAdmin(users.rootAdmin);
+        purrDeposit.setRootAdmin(users.alice);
 
-        assertEq(users.rootAdmin, purrDeposit.rootAdmin());
+        assertEq(users.alice, purrDeposit.rootAdmin());
+    }
+
+    function test_SetSubAdmin_ShouldRevert_WhenNotOwner() public setFork(fork) {
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrDeposit.setSubAdmin(users.alice);
+    }
+
+    function test_SetSubAdmin_ShouldSetSubAdmined() public setFork(fork) {
+        vm.prank(users.rootAdmin);
+        purrDeposit.setSubAdmin(users.rootAdmin);
+
+        assertEq(users.rootAdmin, purrDeposit.subAdmin());
     }
 
     function test_TransferOwnership_ShouldRevert_WhenNotRootAdminAndOwner() public setFork(fork) {
@@ -452,8 +467,8 @@ contract ForkPurrDeposit is BaseTest {
         assertEq(purrDeposit.owner(), users.bob);
 
         vm.prank(users.bob);
-        purrDeposit.updateStatusWithDraw(true);
+        purrDeposit.updateStatusWithDrawAndDeposit(true);
 
-        assertEq(purrDeposit.canWithDraw(), true);
+        assertEq(purrDeposit.canWithDrawAndDeposit(), true);
     }
 }

@@ -15,12 +15,12 @@ contract DeployPurrLaunchPoolcript is BaseScript {
     uint16[] percent;
 
     function run() public broadcast {
-        time.push(uint64(block.timestamp + 45 days));
-        time.push(uint64(block.timestamp + 90 days));
-        time.push(uint64(block.timestamp + 120 days));
-        percent.push(1000);
-        percent.push(5000);
-        percent.push(10_000);
+        // time.push(uint64(block.timestamp + 45 days));
+        // time.push(uint64(block.timestamp + 90 days));
+        // time.push(uint64(block.timestamp + 120 days));
+        // percent.push(1000);
+        // percent.push(5000);
+        // percent.push(10_000);
         PurrLaunchPool launchpool = new PurrLaunchPool(msg.sender);
         ERC20Mock tokenIDO = new ERC20Mock("FANX", "FXK");
 
@@ -36,14 +36,14 @@ contract DeployPurrLaunchPoolcript is BaseScript {
 
         launchPad = LaunchPad({
             unlockPercent: 1000,
-            startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days),
-            autoVestingTime: uint64(block.timestamp + 3 days),
-            vestingTime: uint64(block.timestamp + 7 days),
+            startTime: uint64(2 days),
+            snapshotTime: uint64(3 days),
+            autoVestingTime: uint64(4 days),
+            vestingTime: uint64(7 days),
             percents: percent,
             times: time,
-            tge: block.timestamp + 10 days,
-            cliffTime: 30 days,
+            tge: 10 days,
+            cliffTime: 0,
             linearTime: 50 days,
             tokenOffer: 100_000_000,
             tokenPrice: 100_000,
@@ -54,14 +54,14 @@ contract DeployPurrLaunchPoolcript is BaseScript {
 
         launchPool = LaunchPool({
             unlockPercent: 1000,
-            startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days),
-            autoVestingTime: uint64(block.timestamp + 3 days),
-            vestingTime: uint64(block.timestamp + 7 days),
+            startTime: uint64(2 days),
+            snapshotTime: uint64(3 days),
+            autoVestingTime: uint64(4 days),
+            vestingTime: uint64(7 days),
             percents: percent,
             times: time,
-            tge: block.timestamp + 10 days,
-            cliffTime: 30 days,
+            tge: 10 days,
+            cliffTime: 0,
             linearTime: 50 days,
             tokenReward: 100_000_000,
             totalAirdrop: 20_000,

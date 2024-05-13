@@ -13,9 +13,9 @@ import { PoolState, Pool, UserPool, CreatePool } from "./types/PurrVestingType.s
 import { VestingType } from "./types/PurrLaunchPadType.sol";
 
 /**
- * @title PurrVesting contract
+ * @title PurrVestingLaunchPad contract
  */
-contract PurrVesting is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
+contract PurrVestingLaunchPad is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
     using Math for uint256;
     using SafeERC20 for IERC20;
 

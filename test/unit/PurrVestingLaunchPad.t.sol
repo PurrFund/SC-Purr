@@ -4,16 +4,16 @@ pragma solidity ^0.8.20;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { BaseTest } from "../Base.t.sol";
-import { PurrVesting } from "../../src/PurrVesting.sol";
+import { PurrVestingLaunchPad } from "../../src/PurrVestingLaunchPad.sol";
 import { PoolState, Pool, UserPool, CreatePool } from "../../src/types/PurrVestingType.sol";
 import { ERC20Mock } from "../mocks/ERC20Mock.sol";
 import { VestingType } from "../../src/types/PurrVestingType.sol";
 
-contract PurrVestingTest is BaseTest {
+contract PurrVestingLaunchPadTest is BaseTest {
     using Math for uint256;
 
     ERC20Mock erc20IDO;
-    PurrVesting purrVesting;
+    PurrVestingLaunchPad purrVesting;
     uint256 initBalance;
     address[] depositorAddresses;
     uint256[] amounts;
@@ -31,7 +31,7 @@ contract PurrVestingTest is BaseTest {
 
     function setUp() public {
         initBalance = 100_000e18;
-        purrVesting = new PurrVesting(users.admin);
+        purrVesting = new PurrVestingLaunchPad(users.admin);
         erc20IDO = new ERC20Mock("FANX", "FTK");
         _deal(users.admin, initBalance);
         amounts.push(200e18);

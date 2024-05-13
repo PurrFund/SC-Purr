@@ -4,11 +4,11 @@ pragma solidity ^0.8.20;
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { BaseScript } from "./Base.s.sol";
-import { PurrVesting } from "../src/PurrVesting.sol";
+import { PurrVestingLaunchPad } from "../src/PurrVestingLaunchPad.sol";
 import { CreatePool, VestingType } from "../src/types/PurrVestingType.sol";
 
 contract PurrVestingScript is BaseScript {
-    PurrVesting purrVesting;
+    PurrVestingLaunchPad purrVesting;
     address idoMock = 0x9ab93Fe22e82dC098dA674818a74901EB7a9D7A6;
     uint64[] times;
     uint16[] percents;
@@ -16,7 +16,7 @@ contract PurrVestingScript is BaseScript {
     address[] userList;
 
     function run() public broadcast {
-        purrVesting = new PurrVesting(msg.sender);
+        purrVesting = new PurrVestingLaunchPad(msg.sender);
         CreatePool memory createPool1 = CreatePool({
             projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
             tokenFund: idoMock,

@@ -1,1014 +1,2319 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License_Identifier: UNLICENSED
 pragma solidity ^0.8.20;
+
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { BaseTest } from "../Base.t.sol";
 import { PurrVestingLaunchPool } from "../../src/PurrVestingLaunchPool.sol";
-import { LaunchPool, LaunchPad, PreProject, Project, VestingType } from "../../src/types/PurrLaunchPoolType.sol";
+import { PoolState, Pool, UserPool, CreatePool } from "../../src/types/PurrVestingType.sol";
 import { ERC20Mock } from "../mocks/ERC20Mock.sol";
+import { VestingType } from "../../src/types/PurrVestingType.sol";
 
-contract PurrLaunchPoolTest is BaseTest {
-    event CreateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
-    event UpdateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
+contract PurrVestingLaunchPoolTest is BaseTest {
+    using Math for uint256;
 
-    PurrVestingLaunchPool public purrLaunchPool;
+    ERC20Mock erc20IDO;
+    PurrVestingLaunchPool purrVesting;
+    uint256 initBalance;
+    address[] depositorAddresses;
+    uint256[] amounts;
+    uint64[] times;
+    uint16[] percents;
+    address[] _users;
+    uint256[] _fundAmounts;
+    address[] _usersRemove;
+    uint256[] _fundAmountsRemove;
 
-    ERC20Mock tokenIDO = new ERC20Mock("tokenIDO", "IDO");
-    ERC20Mock tokenUseToBuy = new ERC20Mock("tokenUseToBuy", "TBuy");
-
-    uint64[] time;
-    uint16[] percent;
-    uint16 unlockPercent = 1000;
-
-    function getTime(uint256 _time) internal view returns (uint256) {
-        return block.timestamp + _time;
-    }
-
-    function getPreProject(
-        address _owner,
-        address _tokenIDO,
-        string memory _name,
-        string memory _twitter,
-        string memory _discord,
-        string memory _telegram,
-        string memory _website
-    )
-        internal
-        pure
-        returns (PreProject memory)
-    {
-        return PreProject({
-            owner: _owner,
-            tokenIDO: _tokenIDO,
-            name: _name,
-            twitter: _twitter,
-            discord: _discord,
-            telegram: _telegram,
-            website: _website
-        });
-    }
-
-    function getLaunchPad(
-        uint16 _unlockPercent,
-        uint64 _startTime,
-        uint64 _snapshotTime,
-        uint64 _autoVestingTime,
-        uint64 _vestingTime,
-        uint16[] memory _percents,
-        uint64[] memory _times,
-        uint256 _tge,
-        uint256 _cliffTime,
-        uint256 _linearTime,
-        uint256 _tokenOffer,
-        uint256 _tokenPrice,
-        uint256 _totalRaise,
-        uint256 _ticketSize,
-        VestingType _typeVesting
-    )
-        internal
-        pure
-        returns (LaunchPad memory)
-    {
-        return LaunchPad({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: _percents,
-            times: _times,
-            tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenOffer: _tokenOffer,
-            tokenPrice: _tokenPrice,
-            totalRaise: _totalRaise,
-            ticketSize: _ticketSize,
-            typeVesting: _typeVesting
-        });
-    }
-
-    function getLaunchPool(
-        uint16 _unlockPercent,
-        uint64 _startTime,
-        uint64 _snapshotTime,
-        uint64 _autoVestingTime,
-        uint64 _vestingTime,
-        uint16[] memory _percents,
-        uint64[] memory _times,
-        uint256 _tge,
-        uint256 _cliffTime,
-        uint256 _linearTime,
-        uint256 _tokenReward,
-        uint256 _totalAirdrop,
-        VestingType _typeVesting
-    )
-        internal
-        pure
-        returns (LaunchPool memory)
-    {
-        return LaunchPool({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: _percents,
-            times: _times,
-            tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenReward: _tokenReward,
-            totalAirdrop: _totalAirdrop,
-            typeVesting: _typeVesting
-        });
-    }
+    event CreatePoolEvent(Pool pool);
+    event AddFundEvent(uint256 poolId, address[] user, uint256[] fundAmount);
+    event RemoveFundEvent(uint256 poolId, address[] user);
+    event ClaimFundEvent(uint256 poolId, address user, uint256 fundClaimed);
 
     function setUp() public {
-        purrLaunchPool = new PurrVestingLaunchPool(users.admin);
+        initBalance = 100_000e18;
+        purrVesting = new PurrVestingLaunchPool(users.admin);
+        erc20IDO = new ERC20Mock("FANX", "FTK");
+        _deal(users.admin, initBalance);
+        amounts.push(200e18);
+        amounts.push(500e18);
+        amounts.push(700e18);
+        depositorAddresses.push(users.alice);
+        depositorAddresses.push(users.bob);
+        depositorAddresses.push(users.carole);
+
+        vm.startPrank(users.admin);
+        purrVesting.pauseSystem();
+        purrVesting.unpauseSystem();
+        vm.stopPrank();
     }
 
-    function test_CreateProject_ShouldRevert_WhenNotAuthorized() public {
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            30,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            3 days,
-            1 days,
-            1 days,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST
+    function test_GetCurrentClaimPercent_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRight() public {
+        uint256 poolId = 1;
+
+        times.push(uint64(block.timestamp + 100 days));
+        times.push(uint64(block.timestamp + 200 days));
+        times.push(uint64(block.timestamp + 300 days));
+
+        percents.push(uint16(2000));
+        percents.push(uint16(3000));
+        percents.push(uint16(4000));
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, 0, times, percents
         );
-        LaunchPool memory launchPool = getLaunchPool(
-            30,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            3 days,
-            3 days,
-            3 days,
-            30,
-            30,
-            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST
-        );
-        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, users.bob));
-        vm.startPrank(users.bob);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge + createPool.cliff - 1);
+        uint256 expectPercent1 = 0;
+        assertEq(expectPercent1, purrVesting.getCurrentClaimPercent(poolId));
+
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 expectPercent2 = createPool.unlockPercent;
+        uint256 actualPercent2 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent2, actualPercent2);
+
+        vm.warp(times[0] - 1);
+        uint256 expectPercent3 = createPool.unlockPercent;
+        uint256 actualPercent3 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent3, actualPercent3);
+
+        vm.warp(times[0]);
+        uint256 expectPercent4 = createPool.unlockPercent + percents[0];
+        uint256 actualPercent4 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent4, actualPercent4);
+
+        vm.warp(times[1] - 1);
+        uint256 expectPercent5 = createPool.unlockPercent + percents[0];
+        uint256 actualPercent5 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent5, actualPercent5);
+
+        vm.warp(times[1]);
+        uint256 expectPercent6 = createPool.unlockPercent + percents[0] + percents[1];
+        uint256 actualPercent6 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent6, actualPercent6);
+
+        vm.warp(times[2] - 1);
+        uint256 expectPercent7 = createPool.unlockPercent + percents[0] + percents[1];
+        uint256 actualPercent7 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent7, actualPercent7);
+
+        vm.warp(times[2]);
+        uint256 expectPercent8 = 10_000;
+        uint256 actualPercent8 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent8, actualPercent8);
+
+        vm.warp(times[2] + 100 seconds);
+        uint256 expectPercent9 = 10_000;
+        uint256 actualPercent9 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent9, actualPercent9);
     }
 
-    function test_CreateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldCreateProject() public {
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
+    function test_GetCurrentClaimPercent_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRight() public {
+        uint256 poolId = 1;
 
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        times.push(uint64(block.timestamp + 100 days));
+        times.push(uint64(block.timestamp + 200 days));
+        times.push(uint64(block.timestamp + 300 days));
 
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        percents.push(uint16(2000));
+        percents.push(uint16(3000));
+        percents.push(uint16(4000));
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, 0, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
 
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
-        purrLaunchPool.launchPadInfo(1);
-        purrLaunchPool.launchPoolInfo(1);
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
+        uint256 totalAmount;
 
-        Project memory project = Project({
-            id: _projectId,
-            owner: preProject.owner,
-            tokenIDO: preProject.tokenIDO,
-            name: preProject.name,
-            twitter: preProject.twitter,
-            discord: preProject.discord,
-            telegram: preProject.telegram,
-            website: preProject.website
-        });
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
 
-        (
-            uint64 _id,
-            address _owner,
-            address _tokenIDO,
-            string memory _name,
-            string memory _twitter,
-            string memory _discord,
-            string memory _telegram,
-            string memory _website
-        ) = purrLaunchPool.projectInfo(_projectId);
-        Project memory retrievedProject = Project({
-            id: _id,
-            owner: _owner,
-            tokenIDO: _tokenIDO,
-            name: _name,
-            twitter: _twitter,
-            discord: _discord,
-            telegram: _telegram,
-            website: _website
-        });
-        assertEq(abi.encode(retrievedProject), abi.encode(project));
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge - 1 seconds);
+        uint256 expectPercent1 = 0;
+        assertEq(expectPercent1, purrVesting.getCurrentClaimPercent(poolId));
+
+        vm.warp(createPool.tge);
+        uint256 expectPercent2 = createPool.unlockPercent;
+        uint256 actualPercent2 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent2, actualPercent2);
+
+        vm.warp(createPool.tge + createPool.cliff + 1 seconds);
+        uint256 expectPercent3 = createPool.unlockPercent;
+        uint256 actualPercent3 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent3, actualPercent3);
+
+        vm.warp(times[0] - 1 seconds);
+        uint256 expectPercent4 = createPool.unlockPercent;
+        uint256 actualPercent4 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent4, actualPercent4);
+
+        vm.warp(times[0]);
+        uint256 expectPercent5 = createPool.unlockPercent + percents[0];
+        uint256 actualPercent5 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent5, actualPercent5);
+
+        vm.warp(times[1] - 1);
+        uint256 expectPercent6 = createPool.unlockPercent + percents[0];
+        uint256 actualPercent6 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent6, actualPercent6);
+
+        vm.warp(times[1]);
+        uint256 expectPercent7 = createPool.unlockPercent + percents[0] + percents[1];
+        uint256 actualPercent7 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent7, actualPercent7);
+
+        vm.warp(times[2] - 1);
+        uint256 expectPercent8 = createPool.unlockPercent + percents[0] + percents[1];
+        uint256 actualPercent8 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent8, actualPercent8);
+
+        vm.warp(times[2]);
+        uint256 expectPercent9 = 10_000;
+        uint256 actualPercent9 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent9, actualPercent9);
+
+        vm.warp(times[2] + 100 seconds);
+        uint256 expectPercent10 = 10_000;
+        uint256 actualPercent10 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent10, actualPercent10);
     }
 
-    function test_CreateProject_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldCreateProject() public {
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
+    function test_GetCurrentClaimPercent_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRight() public {
+        uint256 poolId = 1;
 
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            0,
-            365 days,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, 360 days, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            0,
-            365 days,
-            30,
-            30,
-            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
-        );
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
 
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        uint256 totalAmount;
 
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
 
-        Project memory project = Project({
-            id: _projectId,
-            owner: preProject.owner,
-            tokenIDO: preProject.tokenIDO,
-            name: preProject.name,
-            twitter: preProject.twitter,
-            discord: preProject.discord,
-            telegram: preProject.telegram,
-            website: preProject.website
-        });
+            unchecked {
+                ++i;
+            }
+        }
 
-        (
-            uint64 _id,
-            address _owner,
-            address _tokenIDO,
-            string memory _name,
-            string memory _twitter,
-            string memory _discord,
-            string memory _telegram,
-            string memory _website
-        ) = purrLaunchPool.projectInfo(_projectId);
-        Project memory retrievedProject = Project({
-            id: _id,
-            owner: _owner,
-            tokenIDO: _tokenIDO,
-            name: _name,
-            twitter: _twitter,
-            discord: _discord,
-            telegram: _telegram,
-            website: _website
-        });
-        assertEq(abi.encode(retrievedProject), abi.encode(project));
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge - 1);
+        uint256 expectPercent1 = 0;
+        assertEq(expectPercent1, purrVesting.getCurrentClaimPercent(poolId));
+
+        vm.warp(createPool.tge);
+        uint256 expectPercent2 = createPool.unlockPercent;
+        uint256 actualPercent2 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent2, actualPercent2);
+
+        vm.warp(createPool.tge + createPool.cliff - 1 seconds);
+        uint256 expectPercent3 = createPool.unlockPercent;
+        uint256 actualPercent3 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent3, actualPercent3);
+
+        vm.warp(createPool.tge + createPool.cliff + 199 days);
+        uint256 expectPercent4 = (block.timestamp - createPool.tge - createPool.cliff).mulDiv(
+            10_000 - createPool.unlockPercent, createPool.linearVestingDuration, Math.Rounding.Floor
+        ) + createPool.unlockPercent;
+        uint256 actualPercent4 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent4, actualPercent4);
+
+        vm.warp(createPool.tge + createPool.cliff + 367 days);
+        uint256 expectPercent5 = 10_000;
+        uint256 actualPercent5 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent5, actualPercent5);
     }
 
-    function test_CreateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldCreateLaunchPad() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+    function test_GetCurrentClaimPercent_VESTING_TYPE_LINEAR_CLIFF_FIRST_ShouldRight() public {
+        uint256 poolId = 1;
 
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, 360 days, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
 
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
+        uint256 totalAmount;
 
-        (
-            uint16 _unlockPercent,
-            uint64 _startTime,
-            uint64 _snapshotTime,
-            uint64 _autoVestingTime,
-            uint64 _vestingTime,
-            uint256 _tge,
-            uint256 _cliffTime,
-            uint256 _linearTime,
-            uint256 _tokenOffer,
-            uint256 _tokenPrice,
-            uint256 _totalRaise,
-            uint256 _ticketSize,
-            VestingType _typeVesting
-        ) = purrLaunchPool.launchPadInfo(_projectId);
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
 
-        LaunchPad memory retrievedLaunchPad = LaunchPad({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: percent,
-            times: time,
-            tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenOffer: _tokenOffer,
-            tokenPrice: _tokenPrice,
-            totalRaise: _totalRaise,
-            ticketSize: _ticketSize,
-            typeVesting: _typeVesting
-        });
-        assertEq(abi.encode(retrievedLaunchPad), abi.encode(launchPad));
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge + createPool.cliff - 1 seconds);
+        uint256 expectPercent1 = 0;
+        assertEq(expectPercent1, purrVesting.getCurrentClaimPercent(poolId));
+
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 expectPercent2 = createPool.unlockPercent;
+        uint256 actualPercent2 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent2, actualPercent2);
+
+        vm.warp(createPool.tge + createPool.cliff + 210 days);
+        uint256 expectPercent4 = (block.timestamp - createPool.tge - createPool.cliff).mulDiv(
+            10_000 - createPool.unlockPercent, createPool.linearVestingDuration, Math.Rounding.Floor
+        ) + createPool.unlockPercent;
+        uint256 actualPercent4 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent4, actualPercent4);
+
+        vm.warp(createPool.tge + createPool.cliff + 366 days);
+        uint256 expectPercent5 = 10_000;
+        uint256 actualPercent5 = purrVesting.getCurrentClaimPercent(poolId);
+        assertEq(expectPercent5, actualPercent5);
     }
 
-    function test_CreateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldCreateLaunchPool() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+    function test_ClaimFund_ShouldRevert_WhenInvalidState() public {
+        uint256 poolId = 1;
 
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
 
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        uint256 totalAmount;
 
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
 
-        (
-            uint16 _unlockPercent,
-            uint64 _startTime,
-            uint64 _snapshotTime,
-            uint64 _autoVestingTime,
-            uint64 _vestingTime,
-            uint256 _tge,
-            uint256 _cliffTime,
-            uint256 _linearTime,
-            uint256 _tokenReward,
-            uint256 _totalAirdrop,
-            VestingType _typeVesting
-        ) = purrLaunchPool.launchPoolInfo(_projectId);
+            unchecked {
+                ++i;
+            }
+        }
 
-        LaunchPool memory retrievedLaunchPool = LaunchPool({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: percent,
-            times: time,
-            tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenReward: _tokenReward,
-            totalAirdrop: _totalAirdrop,
-            typeVesting: _typeVesting
-        });
-        assertEq(abi.encode(retrievedLaunchPool), abi.encode(launchPool));
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidState(uint8)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, PoolState.INIT));
+
+        vm.startPrank(users.alice);
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
     }
 
-    function test_CreateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_EmitEvent() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+    function test_ClaimFund_ShouldRevert_WhenInvalidClaimer() public {
+        uint256 poolId = 1;
 
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.start(poolId);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidClaimer(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.startPrank(users.alice);
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
+    }
+
+    function test_ClaimFund_ShouldRevert_WhenInvalidTime() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        uint64 _projectId = 1;
-        Project memory project = Project({
-            id: _projectId,
-            owner: preProject.owner,
-            tokenIDO: preProject.tokenIDO,
-            name: preProject.name,
-            twitter: preProject.twitter,
-            discord: preProject.discord,
-            telegram: preProject.telegram,
-            website: preProject.website
-        });
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.startPrank(users.alice);
+        vm.warp(createPool.tge - 1 seconds);
+
+        bytes4 selector = bytes4(keccak256("InvalidTime(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, block.timestamp));
+
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
+    }
+
+    function test_ClaimFund_SHouldRevert_WhenInvalidClaimPercent() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
+        );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.startPrank(users.alice);
+        vm.warp(createPool.tge + createPool.cliff - 1 seconds);
+
+        bytes4 selector = bytes4(keccak256("InvalidClaimPercent()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
+    }
+
+    function test_ClaimFund_ShouldClaimFunded() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
+        );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        uint256 prePoolFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+
+        vm.startPrank(users.alice);
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 pendingReward = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
+
+        uint256 posUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        uint256 posPoolFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+
+        assertEq(preUserReleased + pendingReward, posUserReleased);
+        assertEq(prePoolFundClaimed + pendingReward, posPoolFundClaimed);
+        assertEq(pendingReward, erc20IDO.balanceOf(users.alice));
+    }
+
+    function test_ClaimFund_ShouldEmit_EventClaimFund() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
+        );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 pendingReward = purrVesting.getPendingFund(poolId, users.alice);
 
         vm.expectEmit(true, true, true, true);
-        emit CreateProject(project, launchPad, launchPool);
+        emit ClaimFundEvent(poolId, users.alice, pendingReward);
 
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        vm.startPrank(users.alice);
+        purrVesting.claimFund(poolId);
+        vm.stopPrank();
     }
 
-    function test_UpdateProject_ShouldRevert_WhenNotAuthorized() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+    function test_ClaimFund_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldClaimFunded() public {
+        uint256 poolId = 1;
 
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        times.push(uint64(block.timestamp + 100 days));
+        times.push(uint64(block.timestamp + 200 days));
+        times.push(uint64(block.timestamp + 300 days));
+
+        percents.push(uint16(2000));
+        percents.push(uint16(3000));
+        percents.push(uint16(4000));
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, 0, times, percents
         );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge + createPool.cliff - 1 seconds);
+
+        uint256 preFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        // bytes4 selector1 = bytes4(keccak256("InvalidClaimPercent()"));
+        // vm.expectRevert(abi.encodeWithSelector(selector1));
+        uint256 fundPending = purrVesting.getPendingFund(poolId, users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("InvalidClaimPercent()"));
+        vm.expectRevert(abi.encodeWithSelector(selector2));
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed, 0);
+        assertEq(posUserReleased, 0);
+        assertEq(posFundClaimed, preFundClaimed + fundPending);
+        assertEq(posUserReleased, preUserReleased + fundPending);
+        assertEq(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 preFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending1 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed1, preFundClaimed1 + fundPending1);
+        assertEq(posUserReleased1, preUserReleased1 + fundPending1);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(times[1] + 1 days);
+        uint256 preFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending2 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed2, preFundClaimed2 + fundPending2);
+        assertEq(posUserReleased2, preUserReleased2 + fundPending2);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+        assertLt(erc20IDO.balanceOf(users.alice), amounts[0]);
+
+        vm.warp(times[2] + 1 days);
+        uint256 preFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending3 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed3, preFundClaimed3 + fundPending3);
+        assertEq(posUserReleased3, preUserReleased3 + fundPending3);
+        assertEq(posFundClaimed3, amounts[0]);
+        assertEq(posUserReleased3, amounts[0]);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+    }
+
+    function test_ClaimFund_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldClaimFunded() public {
+        uint256 poolId = 1;
+
+        times.push(uint64(block.timestamp + 100 days));
+        times.push(uint64(block.timestamp + 200 days));
+        times.push(uint64(block.timestamp + 300 days));
+
+        percents.push(uint16(2000));
+        percents.push(uint16(3000));
+        percents.push(uint16(4000));
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, 0, times, percents
         );
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
 
-        uint64 _projectId = 1;
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge - 1 seconds);
+        uint256 preFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        // bytes4 selector1 = bytes4(keccak256("InvalidTime(uint256)"));
+        // vm.expectRevert(abi.encodeWithSelector(selector1, block.timestamp));
+        uint256 fundPending = purrVesting.getPendingFund(poolId, users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("InvalidTime(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector2, block.timestamp));
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed, 0);
+        assertEq(posUserReleased, 0);
+        assertEq(posFundClaimed, preFundClaimed + fundPending);
+        assertEq(posUserReleased, preUserReleased + fundPending);
+        assertEq(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge);
+        uint256 preFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending1 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed1, preFundClaimed1 + fundPending1);
+        assertEq(posUserReleased1, preUserReleased1 + fundPending1);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(times[1] + 1 days);
+        uint256 preFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending2 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed2, preFundClaimed2 + fundPending2);
+        assertEq(posUserReleased2, preUserReleased2 + fundPending2);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+        assertLt(erc20IDO.balanceOf(users.alice), amounts[0]);
+
+        vm.warp(times[2] + 1 days);
+        uint256 preFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending3 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed3, preFundClaimed3 + fundPending3);
+        assertEq(posUserReleased3, preUserReleased3 + fundPending3);
+        assertEq(posFundClaimed3, amounts[0]);
+        assertEq(posUserReleased3, amounts[0]);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+    }
+
+    function test_ClaimFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldClaimFunded() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
+        );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+
+        vm.warp(createPool.tge - 1 seconds);
+        uint256 preFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        // bytes4 selector1 = bytes4(keccak256("InvalidTime(uint256)"));
+        // vm.expectRevert(abi.encodeWithSelector(selector1, block.timestamp));
+        uint256 fundPending = purrVesting.getPendingFund(poolId, users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("InvalidTime(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector2, block.timestamp));
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed, 0);
+        assertEq(posUserReleased, 0);
+        assertEq(posFundClaimed, preFundClaimed + fundPending);
+        assertEq(posUserReleased, preUserReleased + fundPending);
+        assertEq(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge);
+        uint256 preFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending1 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed1, preFundClaimed1 + fundPending1);
+        assertEq(posUserReleased1, preUserReleased1 + fundPending1);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge + createPool.cliff + createPool.linearVestingDuration - 100 days);
+        uint256 preFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending2 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed2, preFundClaimed2 + fundPending2);
+        assertEq(posUserReleased2, preUserReleased2 + fundPending2);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+        assertLt(erc20IDO.balanceOf(users.alice), amounts[0]);
+
+        vm.warp(createPool.tge + createPool.cliff + createPool.linearVestingDuration + 1 days);
+        uint256 preFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending3 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed3, preFundClaimed3 + fundPending3);
+        assertEq(posUserReleased3, preUserReleased3 + fundPending3);
+        assertEq(posFundClaimed3, amounts[0]);
+        assertEq(posUserReleased3, amounts[0]);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+    }
+
+    function test_ClaimFund_VESTING_TYPE_LINEAR_CLIFF_FIRST_ShouldClaimFunded() public {
+        uint256 poolId = 1;
+
+        uint256 linearDuration = 365 days;
+
+        CreatePool memory createPool = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST, block.timestamp + 1 days, 60 days, 1000, linearDuration, times, percents
+        );
+        // - vesting type , tge , cliff, unlockpercent , linearDuration, time , percent
+
+        vm.startPrank(users.admin);
+        purrVesting.createPool(createPool);
+
+        uint256 totalAmount;
+
+        for (uint256 i; i < amounts.length;) {
+            totalAmount += amounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        erc20IDO.approve(address(purrVesting), totalAmount);
+
+        purrVesting.addFund(poolId, amounts, depositorAddresses);
+        purrVesting.start(poolId);
+
+        vm.stopPrank();
+        vm.warp(createPool.tge + createPool.cliff - 1 seconds);
+        uint256 preFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        // bytes4 selector1 = bytes4(keccak256("InvalidClaimPercent()"));
+        // vm.expectRevert(abi.encodeWithSelector(selector1));
+        uint256 fundPending = purrVesting.getPendingFund(poolId, users.alice);
+
+        bytes4 selector2 = bytes4(keccak256("InvalidClaimPercent()"));
+        vm.expectRevert(abi.encodeWithSelector(selector2));
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed, 0);
+        assertEq(posUserReleased, 0);
+        assertEq(posFundClaimed, preFundClaimed + fundPending);
+        assertEq(posUserReleased, preUserReleased + fundPending);
+        assertEq(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge + createPool.cliff);
+        uint256 preFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending1 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed1 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased1 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed1, preFundClaimed1 + fundPending1);
+        assertEq(posUserReleased1, preUserReleased1 + fundPending1);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+
+        vm.warp(createPool.tge + createPool.cliff + createPool.linearVestingDuration - 100 days);
+        uint256 preFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending2 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed2 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased2 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed2, preFundClaimed2 + fundPending2);
+        assertEq(posUserReleased2, preUserReleased2 + fundPending2);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+        assertLt(erc20IDO.balanceOf(users.alice), amounts[0]);
+
+        vm.warp(createPool.tge + createPool.cliff + createPool.linearVestingDuration + 1 days);
+        uint256 preFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 preUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+
+        vm.startPrank(users.alice);
+        uint256 fundPending3 = purrVesting.getPendingFund(poolId, users.alice);
+        purrVesting.claimFund(poolId);
+
+        uint256 posFundClaimed3 = purrVesting.getPoolInfo(poolId).fundsClaimed;
+        uint256 posUserReleased3 = purrVesting.getUserClaimInfo(poolId, users.alice).released;
+        vm.stopPrank();
+
+        assertEq(posFundClaimed3, preFundClaimed3 + fundPending3);
+        assertEq(posUserReleased3, preUserReleased3 + fundPending3);
+        assertEq(posFundClaimed3, amounts[0]);
+        assertEq(posUserReleased3, amounts[0]);
+        assertGt(erc20IDO.balanceOf(users.alice), 0);
+    }
+
+    /// NGUYEN
+    function test_CreatePool_ShouldRevert_WhenNotOwner() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(2555),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
 
         bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
-        vm.expectRevert(abi.encodeWithSelector(selector, users.bob));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
 
-        vm.prank(users.bob);
-        purrLaunchPool.updateProject(_projectId, preProject, launchPool, launchPad);
+        vm.prank(users.alice);
+        purrVesting.createPool(poolVesting);
     }
 
-    function test_UpdateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldUpdateProject() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+    function test_CreatePool_ShouldRevert_WhenInvalid_TGE_LessThanTimestamp() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(2555),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
         );
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
+        vm.warp(2 days);
+        bytes4 selector = bytes4(keccak256("InvalidArgPercentCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_ShouldRevert_WhenInvalid_GreaterThanOneHundredPervent() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(10_001),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgPercentCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRevert_WhenInvalid_DifferenceLengthTimesAndPercents()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalid_DifferenceLengthTimesAndPercents()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRevert_WhenInvalid_LinierVestingDurationDifferenceZero()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalid_LinierVestingDurationDifferenceZero()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRevert_WhenInvalid_Time_LessThanSumTgeAndCliffTime()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 1 days, 2 days, 3 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
             0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgMileStoneCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalid_Time_LessThanSumTgeAndCliffTime()
+        public
+    {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 1 days, 2 days, 3 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            uint256(120 days),
+            uint256(30),
+            0,
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgMileStoneCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRevert_WhenInvalid_Time_tmpTimeLessThanCurTime() public {
+        times = [10 days, 20 days, 30 days, 4 days, 5 days, 6 days, 7 days, 8 days, 9 days, 10 days];
+        percents = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            0,
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgMileStoneCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalid_Time_tmpTimeLessThanCurTime() public {
+        times = [10 days, 20 days, 30 days, 4 days, 5 days, 6 days, 7 days, 8 days, 9 days, 10 days];
+        percents = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            0,
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgMileStoneCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRevert_WhenInvalid_TimesLengthDifferenceZero() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_CLIFF_FIRST_ShouldRevert_WhenInvalid_TimesLengthDifferenceZero() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRevert_WhenInvalid_PercentsLengthDifferenceZero() public {
+        percents = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_CLIFF_FIRST_ShouldRevert_WhenInvalid_PercentsLengthDifferenceZero() public {
+        percents = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRevert_WhenInvalid_VestingDurationEqualOrLessThanZero()
+        public
+    {
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            0,
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_LINEAR_CLIFF_FIRST_ShouldRevert_WhenInvalid_VestingDurationEqualOrLessThanZero()
+        public
+    {
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            uint256(30),
+            0,
+            times,
+            percents
+        );
+
+        bytes4 selector = bytes4(keccak256("InvalidArgLinearCreatePool()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldCreatePooled() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
         );
 
         vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        purrVesting.createPool(poolVesting);
 
-        PreProject memory preProjectUpdate =
-            getPreProject(users.bob, address(tokenIDO), "Bob", "twitter", "discord", "telegram", "website");
+        assertEq(purrVesting.poolIndex(), 1);
 
-        percent = [100, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-        LaunchPad memory launchPadUpdate = getLaunchPad(
-            unlockPercent - 100,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        LaunchPool memory launchPoolUpdate;
-
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
-
-        vm.prank(users.admin);
-        purrLaunchPool.updateProject(_projectId, preProjectUpdate, launchPoolUpdate, launchPadUpdate);
-
-        Project memory projectUpdate = Project({
-            id: _projectId,
-            owner: preProjectUpdate.owner,
-            tokenIDO: preProjectUpdate.tokenIDO,
-            name: preProjectUpdate.name,
-            twitter: preProjectUpdate.twitter,
-            discord: preProjectUpdate.discord,
-            telegram: preProjectUpdate.telegram,
-            website: preProjectUpdate.website
+        Pool memory _pool = Pool({
+            id: 1,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: poolVesting.tokenFund,
+            name: poolVesting.name,
+            vestingType: poolVesting.vestingType,
+            tge: poolVesting.tge,
+            cliff: poolVesting.cliff,
+            unlockPercent: poolVesting.unlockPercent,
+            linearVestingDuration: poolVesting.linearVestingDuration,
+            times: poolVesting.times,
+            percents: poolVesting.percents,
+            fundsTotal: 0,
+            fundsClaimed: 0,
+            state: PoolState.INIT
         });
 
         (
-            uint64 _id,
-            address _owner,
-            address _tokenIDO,
+            uint256 _id,
+            ,
+            uint256 _tge,
+            uint256 _cliff,
+            uint256 _unlockPercent,
+            uint256 _linearVestingDuration,
+            uint256 _fundsTotal,
+            uint256 _fundsClaimed,
+            address _tokenFund,
             string memory _name,
-            string memory _twitter,
-            string memory _discord,
-            string memory _telegram,
-            string memory _website
-        ) = purrLaunchPool.projectInfo(_projectId);
-        Project memory retrievedProjectUpdate = Project({
+            VestingType _vestingType,
+            PoolState _state
+        ) = purrVesting.poolInfo(1);
+
+        Pool memory retrievedPool = Pool({
             id: _id,
-            owner: _owner,
-            tokenIDO: _tokenIDO,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: _tokenFund,
             name: _name,
-            twitter: _twitter,
-            discord: _discord,
-            telegram: _telegram,
-            website: _website
+            vestingType: _vestingType,
+            tge: _tge,
+            cliff: _cliff,
+            unlockPercent: _unlockPercent,
+            linearVestingDuration: _linearVestingDuration,
+            times: times,
+            percents: percents,
+            fundsTotal: _fundsTotal,
+            fundsClaimed: _fundsClaimed,
+            state: _state
         });
-        assertEq(abi.encode(retrievedProjectUpdate), abi.encode(projectUpdate));
+
+        assertEq(abi.encode(_pool), abi.encode(retrievedPool));
     }
 
-    function test_UpdateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldUpdateLaunchPad() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+    function test_CreatePool_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldCreatePool() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
         );
-
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
-
-        PreProject memory preProjectUpdate =
-            getPreProject(users.bob, address(tokenIDO), "Bob", "twitter", "discord", "telegram", "website");
-
-        percent = [100, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-
-        LaunchPad memory launchPadUpdate = getLaunchPad(
-            unlockPercent - 100,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        LaunchPool memory launchPoolUpdate;
-
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
 
         vm.prank(users.admin);
-        purrLaunchPool.updateProject(_projectId, preProjectUpdate, launchPoolUpdate, launchPadUpdate);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        assertEq(purrVesting.poolIndex(), poolIndex);
+
+        Pool memory _pool = Pool({
+            id: poolIndex,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: poolVesting.tokenFund,
+            name: poolVesting.name,
+            vestingType: poolVesting.vestingType,
+            tge: poolVesting.tge,
+            cliff: poolVesting.cliff,
+            unlockPercent: poolVesting.unlockPercent,
+            linearVestingDuration: poolVesting.linearVestingDuration,
+            times: poolVesting.times,
+            percents: poolVesting.percents,
+            fundsTotal: 0,
+            fundsClaimed: 0,
+            state: PoolState.INIT
+        });
 
         (
-            uint16 _unlockPercent,
-            uint64 _startTime,
-            uint64 _snapshotTime,
-            uint64 _autoVestingTime,
-            uint64 _vestingTime,
+            uint256 _id,
+            ,
             uint256 _tge,
-            uint256 _cliffTime,
-            uint256 _linearTime,
-            uint256 _tokenOffer,
-            uint256 _tokenPrice,
-            uint256 _totalRaise,
-            uint256 _ticketSize,
-            VestingType _typeVesting
-        ) = purrLaunchPool.launchPadInfo(_projectId);
+            uint256 _cliff,
+            uint256 _unlockPercent,
+            uint256 _linearVestingDuration,
+            uint256 _fundsTotal,
+            uint256 _fundsClaimed,
+            address _tokenFund,
+            string memory _name,
+            VestingType _vestingType,
+            PoolState _state
+        ) = purrVesting.poolInfo(1);
 
-        LaunchPad memory retrievedLaunchPadUpdate = LaunchPad({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: percent,
-            times: time,
+        Pool memory retrievedPool = Pool({
+            id: _id,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: _tokenFund,
+            name: _name,
+            vestingType: _vestingType,
             tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenOffer: _tokenOffer,
-            tokenPrice: _tokenPrice,
-            totalRaise: _totalRaise,
-            ticketSize: _ticketSize,
-            typeVesting: _typeVesting
+            cliff: _cliff,
+            unlockPercent: _unlockPercent,
+            linearVestingDuration: _linearVestingDuration,
+            times: times,
+            percents: percents,
+            fundsTotal: _fundsTotal,
+            fundsClaimed: _fundsClaimed,
+            state: _state
         });
-        assertEq(abi.encode(retrievedLaunchPadUpdate), abi.encode(launchPadUpdate));
+
+        assertEq(abi.encode(_pool), abi.encode(retrievedPool));
     }
 
-    function test_UpdateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldUpdateLauchPool() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+    function test_CreatePool_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldEmit_CreatePoolEvent() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
         );
-
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
-
-        PreProject memory preProjectUpdate =
-            getPreProject(users.bob, address(tokenIDO), "Bob", "twitter", "discord", "telegram", "website");
-        percent = [100, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-        LaunchPad memory launchPadUpdate = getLaunchPad(
-            unlockPercent - 100,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        LaunchPool memory launchPoolUpdate = getLaunchPool(
-            unlockPercent - 100,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
-
-        vm.prank(users.admin);
-        purrLaunchPool.updateProject(_projectId, preProjectUpdate, launchPoolUpdate, launchPadUpdate);
 
         (
-            uint16 _unlockPercent,
-            uint64 _startTime,
-            uint64 _snapshotTime,
-            uint64 _autoVestingTime,
-            uint64 _vestingTime,
+            uint256 _id,
+            ,
             uint256 _tge,
-            uint256 _cliffTime,
-            uint256 _linearTime,
-            uint256 _tokenReward,
-            uint256 _totalAirdrop,
-            VestingType _typeVesting
-        ) = purrLaunchPool.launchPoolInfo(_projectId);
+            uint256 _cliff,
+            uint256 _unlockPercent,
+            uint256 _linearVestingDuration,
+            uint256 _fundsTotal,
+            uint256 _fundsClaimed,
+            address _tokenFund,
+            string memory _name,
+            VestingType _vestingType,
+            PoolState _state
+        ) = purrVesting.poolInfo(1);
 
-        LaunchPool memory retrievedLaunchPoolUpdate = LaunchPool({
-            unlockPercent: _unlockPercent,
-            startTime: _startTime,
-            snapshotTime: _snapshotTime,
-            autoVestingTime: _autoVestingTime,
-            vestingTime: _vestingTime,
-            percents: percent,
-            times: time,
+        Pool memory retrievedPool = Pool({
+            id: _id,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: _tokenFund,
+            name: _name,
+            vestingType: _vestingType,
             tge: _tge,
-            cliffTime: _cliffTime,
-            linearTime: _linearTime,
-            tokenReward: _tokenReward,
-            totalAirdrop: _totalAirdrop,
-            typeVesting: _typeVesting
+            cliff: _cliff,
+            unlockPercent: _unlockPercent,
+            linearVestingDuration: _linearVestingDuration,
+            times: times,
+            percents: percents,
+            fundsTotal: _fundsTotal,
+            fundsClaimed: _fundsClaimed,
+            state: _state
         });
-        assertEq(abi.encode(retrievedLaunchPoolUpdate), abi.encode(launchPoolUpdate));
+
+        vm.expectEmit(true, true, false, false);
+        emit CreatePoolEvent(retrievedPool);
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
     }
 
-    function test_UpdateProject_VESTING_TYPE_MILESTONE_CLIFF_FIRST_EmitEvent() public {
-        time = [11 days + 1 seconds, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
-        percent = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-
-        PreProject memory preProject =
-            getPreProject(users.alice, address(tokenIDO), "Alice", "twitter", "discord", "telegram", "website");
-        LaunchPad memory launchPad = getLaunchPad(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
+    function test_CreatePool_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldEmit_CreatePoolEvent() public {
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
             1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
         );
 
-        LaunchPool memory launchPool = getLaunchPool(
-            unlockPercent,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days + 1 seconds,
-            1 days,
-            0,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        vm.prank(users.admin);
-        purrLaunchPool.createProject(preProject, launchPool, launchPad);
+        (
+            uint256 _id,
+            ,
+            uint256 _tge,
+            uint256 _cliff,
+            uint256 _unlockPercent,
+            uint256 _linearVestingDuration,
+            uint256 _fundsTotal,
+            uint256 _fundsClaimed,
+            address _tokenFund,
+            string memory _name,
+            VestingType _vestingType,
+            PoolState _state
+        ) = purrVesting.poolInfo(1);
 
-        PreProject memory preProjectUpdate =
-            getPreProject(users.bob, address(tokenIDO), "Bob", "twitter", "discord", "telegram", "website");
-        percent = [100, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
-        LaunchPad memory launchPadUpdate = getLaunchPad(
-            unlockPercent - 100,
-            2 days,
-            3 days,
-            6 days,
-            10 days,
-            percent,
-            time,
-            10 days,
-            1 days,
-            0,
-            30,
-            30,
-            30,
-            30,
-            VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
-        );
-        LaunchPool memory launchPoolUpdate;
-        uint64 _projectId = 1;
-        assertEq(purrLaunchPool.projectId(), _projectId);
-
-        Project memory projectUpdate = Project({
-            id: _projectId,
-            owner: preProjectUpdate.owner,
-            tokenIDO: preProjectUpdate.tokenIDO,
-            name: preProjectUpdate.name,
-            twitter: preProjectUpdate.twitter,
-            discord: preProjectUpdate.discord,
-            telegram: preProjectUpdate.telegram,
-            website: preProjectUpdate.website
+        Pool memory retrievedPool = Pool({
+            id: _id,
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: _tokenFund,
+            name: _name,
+            vestingType: _vestingType,
+            tge: _tge,
+            cliff: _cliff,
+            unlockPercent: _unlockPercent,
+            linearVestingDuration: _linearVestingDuration,
+            times: times,
+            percents: percents,
+            fundsTotal: _fundsTotal,
+            fundsClaimed: _fundsClaimed,
+            state: _state
         });
+
+        vm.expectEmit(true, true, false, false);
+        emit CreatePoolEvent(retrievedPool);
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+    }
+
+    function test_AddFund_ShouldRevert_WhenInvalidOwner() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+    }
+
+    function test_AddFund_ShouldRevert_WhenInvalidArgument() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+
+        bytes4 selector = bytes4(keccak256("InvalidArgument()"));
+        vm.expectRevert(abi.encodeWithSelector(selector));
+
+        vm.prank(users.admin);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+    }
+
+    function test_AddFund_ShouldRevert_WhenInvalidPoolIndexParam_GreaterThanPoolIndex() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 2;
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 2));
+
+        vm.prank(users.admin);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+    }
+
+    function test_AddFund_ShouldRevert_WhenInvalidPoolIndexParam_LessThanOrEqualZero() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 0;
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 0));
+
+        vm.prank(users.admin);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+    }
+
+    function test_AddFund_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldAddFund() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        uint256 length = _users.length;
+        uint256 preTotalFundDeposit;
+        uint256 posTotalFundDeposit;
+        uint256 totalFundAmount;
+
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        for (uint256 i; i < length;) {
+            vm.prank(_users[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            preTotalFundDeposit += _userPool.fund;
+            totalFundAmount += _fundAmounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool1 = purrVesting.getPoolInfo(poolIndex);
+        uint256 prePoolFundsTotal = _pool1.fundsTotal;
+        uint256 prePurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+        uint256 preOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        for (uint256 i; i < length;) {
+            vm.prank(_users[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            posTotalFundDeposit += _userPool.fund;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        Pool memory _pool2 = purrVesting.getPoolInfo(poolIndex);
+        uint256 posPoolFundsTotal = _pool2.fundsTotal;
+        uint256 posPurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+        uint256 posOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+
+        uint256 retrievedTotalFund = posTotalFundDeposit - preTotalFundDeposit;
+        uint256 retrievedPoolFundsTotal = posPoolFundsTotal - prePoolFundsTotal;
+        uint256 retrievedTotalUsersFund = preOwnerBalance - posOwnerBalance;
+        uint256 retrievedTotalPurrVestingFund = posPurrVestingBalance - prePurrVestingBalance;
+
+        assertEq(retrievedTotalFund, totalFundAmount);
+        assertEq(retrievedPoolFundsTotal, totalFundAmount);
+        assertEq(retrievedTotalUsersFund, totalFundAmount);
+        assertEq(retrievedTotalPurrVestingFund, totalFundAmount);
+    }
+
+    function test_AddFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldAddFund() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        uint256 length = _users.length;
+        uint256 preTotalFundDeposit;
+        uint256 posTotalFundDeposit;
+        uint256 totalFundAmount;
+        uint256 prePoolFundsTotal;
+        uint256 posPoolFundsTotal;
+        uint256 preOwnerBalance;
+        uint256 posOwnerBalance;
+        uint256 prePurrVestingBalance;
+        uint256 posPurrVestingBalance;
+
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        for (uint256 i; i < length;) {
+            vm.prank(_users[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            preTotalFundDeposit += _userPool.fund;
+            totalFundAmount += _fundAmounts[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool1 = purrVesting.getPoolInfo(poolIndex);
+        prePoolFundsTotal = _pool1.fundsTotal;
+        prePurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+        preOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        for (uint256 i; i < length;) {
+            vm.prank(_users[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            posTotalFundDeposit += _userPool.fund;
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool2 = purrVesting.getPoolInfo(poolIndex);
+        posPoolFundsTotal = _pool2.fundsTotal;
+        posPurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+        posOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+
+        uint256 retrievedTotalFund = posTotalFundDeposit - preTotalFundDeposit;
+        uint256 retrievedPoolFundsTatol = posPoolFundsTotal - prePoolFundsTotal;
+        uint256 retrievedTotalUsersFund = preOwnerBalance - posOwnerBalance;
+        uint256 retrievedTotalPurrVestingFund = posPurrVestingBalance - prePurrVestingBalance;
+
+        assertEq(retrievedTotalFund, totalFundAmount);
+        assertEq(retrievedPoolFundsTatol, totalFundAmount);
+        assertEq(retrievedTotalUsersFund, totalFundAmount);
+        assertEq(retrievedTotalPurrVestingFund, totalFundAmount);
+    }
+
+    function test_AddFund_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldEmit_AddFundEvent() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
 
         vm.expectEmit(true, true, true, true);
-        emit UpdateProject(projectUpdate, launchPadUpdate, launchPoolUpdate);
+        emit AddFundEvent(poolIndex, _users, _fundAmounts);
+
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+    }
+
+    function test_AddFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldEmit_AddFundEvent() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
 
         vm.prank(users.admin);
-        purrLaunchPool.updateProject(_projectId, preProjectUpdate, launchPoolUpdate, launchPadUpdate);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+
+        vm.expectEmit(true, true, true, true);
+        emit AddFundEvent(poolIndex, _users, _fundAmounts);
+
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+    }
+
+    function test_RemoveFund_ShouldRevert_WhenInvalidOwner() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("OwnableUnauthorizedAccount(address)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, users.alice));
+
+        vm.prank(users.alice);
+        purrVesting.removeFund(poolIndex, _users);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalidPoolIndex_GreaterThanPoolIndex()
+        public
+    {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 2));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex + 1, _users);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRevert_WhenInvalidPoolIndex_GreaterThanPoolIndex() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 2));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex + 1, _users);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_MILESTONE_UNLOCK_FIRST_ShouldRevert_WhenInvalidPoolIndex_LessThanOrEqualZero() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 0));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(0, _users);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRevert_WhenInvalidPoolIndex_LessThanOrEqualZero() public {
+        _users = [users.alice, users.bob];
+        _fundAmounts = [1e18, 2e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        bytes4 selector = bytes4(keccak256("InvalidPoolIndex(uint256)"));
+        vm.expectRevert(abi.encodeWithSelector(selector, 0));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(0, _users);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldRemoveFund() public {
+        _users = [users.alice, users.bob, users.carole];
+        _fundAmounts = [1e18, 2e18, 3e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        _usersRemove = [users.alice, users.bob];
+        _fundAmountsRemove = [1e18, 2e18];
+        uint256 length = _usersRemove.length;
+        uint256 totalfundAmountsRemove;
+        uint256 preTotalRemove;
+        uint256 posTotalRemove;
+        uint256 prePoolFundsTotal;
+        uint256 posPoolFundsTotal;
+        uint256 preOwnerBalance;
+        uint256 posOwnerBalance;
+        uint256 prePurrVestingBalance;
+        uint256 posPurrVestingBalance;
+
+        for (uint256 i; i < length;) {
+            vm.prank(_usersRemove[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            preTotalRemove += _userPool.fund;
+            totalfundAmountsRemove += _fundAmountsRemove[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool1 = purrVesting.getPoolInfo(poolIndex);
+        prePoolFundsTotal = _pool1.fundsTotal;
+        preOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+        prePurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex, _usersRemove);
+
+        for (uint256 i; i < length;) {
+            vm.prank(_usersRemove[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+            posTotalRemove += _userPool.fund;
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool2 = purrVesting.getPoolInfo(poolIndex);
+        posPoolFundsTotal = _pool2.fundsTotal;
+        posOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+        posPurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+
+        uint256 retrievedTotalRemove = preTotalRemove - posTotalRemove;
+        uint256 retrievedPoolFundsTotal = prePoolFundsTotal - posPoolFundsTotal;
+        uint256 retrievedOwnerBalance = posOwnerBalance - preOwnerBalance;
+        uint256 retrievedPurrVestingBalance = prePurrVestingBalance - posPurrVestingBalance;
+
+        assertEq(retrievedTotalRemove, totalfundAmountsRemove);
+        assertEq(retrievedPoolFundsTotal, totalfundAmountsRemove);
+        assertEq(retrievedOwnerBalance, totalfundAmountsRemove);
+        assertEq(retrievedPurrVestingBalance, totalfundAmountsRemove);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldRemoveFund() public {
+        _users = [users.alice, users.bob, users.carole];
+        _fundAmounts = [1e18, 2e18, 3e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        _usersRemove = [users.alice, users.bob];
+        _fundAmountsRemove = [1e18, 2e18];
+        uint256 length = _usersRemove.length;
+        uint256 totalfundAmountsRemove;
+        uint256 preTotalRemove;
+        uint256 posTotalRemove;
+        uint256 prePoolFundsTotal;
+        uint256 posPoolFundsTotal;
+        uint256 preOwnerBalance;
+        uint256 posOwnerBalance;
+        uint256 prePurrVestingBalance;
+        uint256 posPurrVestingBalance;
+
+        for (uint256 i; i < length;) {
+            vm.prank(_usersRemove[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+
+            preTotalRemove += _userPool.fund;
+            totalfundAmountsRemove += _fundAmountsRemove[i];
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool1 = purrVesting.getPoolInfo(poolIndex);
+        prePoolFundsTotal = _pool1.fundsTotal;
+        preOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+        prePurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex, _usersRemove);
+
+        for (uint256 i; i < length;) {
+            vm.prank(_usersRemove[i]);
+            UserPool memory _userPool = purrVesting.getUserClaimInfo(poolIndex, _users[i]);
+            posTotalRemove += _userPool.fund;
+
+            unchecked {
+                ++i;
+            }
+        }
+        Pool memory _pool2 = purrVesting.getPoolInfo(poolIndex);
+        posPoolFundsTotal = _pool2.fundsTotal;
+        posOwnerBalance = ERC20Mock(_pool.tokenFund).balanceOf(users.admin);
+        posPurrVestingBalance = ERC20Mock(_pool.tokenFund).balanceOf(address(purrVesting));
+
+        uint256 retrievedTotalRemove = preTotalRemove - posTotalRemove;
+        uint256 retrievedPoolFundsTotal = prePoolFundsTotal - posPoolFundsTotal;
+        uint256 retrievedOwnerBalance = posOwnerBalance - preOwnerBalance;
+        uint256 retrievedPurrVestingBalance = prePurrVestingBalance - posPurrVestingBalance;
+
+        assertEq(retrievedTotalRemove, totalfundAmountsRemove);
+        assertEq(retrievedPoolFundsTotal, totalfundAmountsRemove);
+        assertEq(retrievedOwnerBalance, totalfundAmountsRemove);
+        assertEq(retrievedPurrVestingBalance, totalfundAmountsRemove);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_MILESTONE_CLIFF_FIRST_ShouldEmit_RemoveFundEvent() public {
+        _users = [users.alice, users.bob, users.carole];
+        _fundAmounts = [1e18, 2e18, 3e18];
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        _usersRemove = [users.alice, users.bob];
+        _fundAmountsRemove = [1e18, 2e18];
+
+        vm.expectEmit(true, true, false, true);
+        emit RemoveFundEvent(poolIndex, _usersRemove);
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex, _usersRemove);
+    }
+
+    function test_RemoveFund_VESTING_TYPE_LINEAR_UNLOCK_FIRST_ShouldEmit_RemoveFundEvent() public {
+        _users = [users.alice, users.bob, users.carole];
+        _fundAmounts = [1e18, 2e18, 3e18];
+
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST,
+            uint256(block.timestamp + 1 days),
+            1 days,
+            1000,
+            uint256(block.timestamp + 1 days),
+            times,
+            percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        Pool memory _pool = purrVesting.getPoolInfo(poolIndex);
+
+        vm.startPrank(users.admin);
+        ERC20Mock(_pool.tokenFund).approve(address(purrVesting), 1000e18);
+        purrVesting.addFund(poolIndex, _fundAmounts, _users);
+        vm.stopPrank();
+
+        _usersRemove = [users.alice, users.bob];
+        _fundAmountsRemove = [1e18, 2e18];
+
+        vm.expectEmit(true, true, false, true);
+        emit RemoveFundEvent(poolIndex, _usersRemove);
+
+        vm.prank(users.admin);
+        purrVesting.removeFund(poolIndex, _usersRemove);
+    }
+
+    function test_Start_ShouldStarted() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        assertEq(purrVesting.poolIndex(), poolIndex);
+
+        vm.prank(users.admin);
+        purrVesting.start(poolIndex);
+
+        assertEq(uint8(purrVesting.getPoolInfo(poolIndex).state), uint8(PoolState.STARTING));
+    }
+
+    function test_End_ShouldEnd() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        assertEq(purrVesting.poolIndex(), poolIndex);
+
+        vm.prank(users.admin);
+        purrVesting.end(poolIndex);
+
+        assertEq(uint8(purrVesting.getPoolInfo(poolIndex).state), uint8(PoolState.END));
+    }
+
+    function test_Pause_ShouldPaused() public {
+        times = [10 days, 20 days, 30 days, 40 days, 50 days, 60 days, 70 days, 80 days, 90 days, 100 days];
+        percents = [0, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000];
+        CreatePool memory poolVesting = _createPool(
+            VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST, uint256(block.timestamp + 1 days), 1 days, 1000, 0, times, percents
+        );
+
+        vm.prank(users.admin);
+        purrVesting.createPool(poolVesting);
+
+        uint256 poolIndex = 1;
+        assertEq(purrVesting.poolIndex(), poolIndex);
+
+        vm.prank(users.admin);
+        purrVesting.pause(poolIndex);
+        assertEq(uint8(purrVesting.getPoolInfo(poolIndex).state), uint8(PoolState.PAUSE));
+    }
+
+    function _createPool(
+        VestingType _vestingType,
+        uint256 _tge,
+        uint256 _cliff,
+        uint256 _unlockPercent,
+        uint256 _linearVestingDuration,
+        uint64[] memory _times,
+        uint16[] memory _percents
+    )
+        internal
+        view
+        returns (CreatePool memory)
+    {
+        return CreatePool({
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: address(erc20IDO),
+            name: "FANX",
+            vestingType: _vestingType,
+            tge: _tge,
+            cliff: _cliff,
+            unlockPercent: _unlockPercent,
+            linearVestingDuration: _linearVestingDuration,
+            times: _times,
+            percents: _percents
+        });
+    }
+
+    function _deal(address _reciever, uint256 _amount) internal {
+        vm.prank(_reciever);
+        erc20IDO.mint(_amount);
     }
 }

@@ -1,137 +1,66 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 
-import { LaunchPool, LaunchPad, PreProject, Project, VestingType } from "./types/PurrLaunchPoolType.sol";
-import { IPurrLaunchPool } from "./interfaces/IPurrLaunchPool.sol";
+import { IPurrVesting } from "./interfaces/IPurrVesting.sol";
+import { PoolState, Pool, UserPool, CreatePool } from "./types/PurrVestingType.sol";
+import { VestingType } from "./types/PurrLaunchPadType.sol";
 
 /**
- * @notice PurrLaunchPad contract.
+ * @title PurrVestingLaunchPool contract
  */
-contract PurrVestingLaunchPool is Ownable, IPurrLaunchPool {
+contract PurrVestingLaunchPool is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
+    using Math for uint256;
     using SafeERC20 for IERC20;
 
+    mapping(uint256 poolIndex => Pool pool) public poolInfo;
+    mapping(uint256 poolIndex => mapping(address => UserPool userPool)) public userPoolInfo;
+
+    uint256 public poolIndex;
     uint256 public constant ONE_HUNDRED_PERCENT_SCALED = 10_000;
-    uint64 public projectId;
 
-    mapping(uint64 projectId => Project project) public projectInfo;
-    mapping(uint64 projectId => LaunchPool launchPool) public launchPoolInfo;
-    mapping(uint64 projectId => LaunchPad launchPad) public launchPadInfo;
+    constructor(address initialOwner) Ownable(initialOwner) { }
 
     /**
-     * @param _initialOwner The initial owner.
+     * @inheritdoc IPurrVesting
      */
-    constructor(address _initialOwner) Ownable(_initialOwner) { }
-
-    /**
-     * @inheritdoc IPurrLaunchPool
-     */
-    function createProject(
-        PreProject memory _project,
-        LaunchPool memory _launchPool,
-        LaunchPad memory _launchPad
-    )
-        external
-        onlyOwner
-    {
-        _validateLaunchPad(_launchPad);
-        _validateLaunchPool(_launchPool);
-
-        ++projectId;
-        projectInfo[projectId] = Project({
-            id: projectId,
-            owner: _project.owner,
-            tokenIDO: _project.tokenIDO,
-            name: _project.name,
-            twitter: _project.twitter,
-            discord: _project.discord,
-            telegram: _project.telegram,
-            website: _project.website
-        });
-
-        launchPoolInfo[projectId] = _launchPool;
-        launchPadInfo[projectId] = _launchPad;
-
-        emit CreateProject(projectInfo[projectId], _launchPad, _launchPool);
-    }
-
-    /**
-     * @inheritdoc IPurrLaunchPool
-     */
-    function updateProject(
-        uint64 _projectId,
-        PreProject memory _project,
-        LaunchPool memory _launchPool,
-        LaunchPad memory _launchPad
-    )
-        external
-        onlyOwner
-    {
-        _validateLaunchPad(_launchPad);
-        _validateLaunchPool(_launchPool);
-
-        projectInfo[_projectId] = Project({
-            id: _projectId,
-            owner: _project.owner,
-            tokenIDO: _project.tokenIDO,
-            name: _project.name,
-            twitter: _project.twitter,
-            discord: _project.discord,
-            telegram: _project.telegram,
-            website: _project.website
-        });
-
-        launchPoolInfo[projectId] = _launchPool;
-        launchPadInfo[projectId] = _launchPad;
-
-        emit UpdateProject(projectInfo[projectId], _launchPad, _launchPool);
-    }
-
-    /**
-     * @inheritdoc IPurrLaunchPool
-     */
-    function getProjectInfo(uint64 _projectId) external view returns (Project memory, LaunchPad memory, LaunchPool memory) {
-        return (projectInfo[_projectId], launchPadInfo[projectId], launchPoolInfo[projectId]);
-    }
-
-    /**
-     * @dev Validate {_launchPad} field.
-     *
-     * @param _launchPad The launchpad information.
-     */
-    function _validateLaunchPad(LaunchPad memory _launchPad) public pure {
-        if (uint8(_launchPad.typeVesting) > 3) {
+    function createPool(CreatePool calldata _createPool) external onlyOwner {
+        if (uint8(_createPool.vestingType) > 3) {
             revert InvalidVestingType();
         }
 
         if (
-            _launchPad.tge < _launchPad.vestingTime || _launchPad.unlockPercent < 0
-                || _launchPad.unlockPercent > ONE_HUNDRED_PERCENT_SCALED || _launchPad.cliffTime < 0
+            _createPool.tge < block.timestamp || _createPool.unlockPercent < 0
+                || _createPool.unlockPercent > ONE_HUNDRED_PERCENT_SCALED || _createPool.cliff < 0
         ) {
             revert InvalidArgPercentCreatePool();
         }
 
         if (
-            uint8(_launchPad.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)
-                || uint8(_launchPad.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)
+            uint8(_createPool.vestingType) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)
+                || uint8(_createPool.vestingType) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)
         ) {
             if (
-                _launchPad.times.length != _launchPad.percents.length || _launchPad.times.length < 0 || _launchPad.linearTime != 0
+                _createPool.times.length != _createPool.percents.length || _createPool.times.length < 0
+                    || _createPool.linearVestingDuration != 0
             ) {
                 revert InvalidArgCreatePool();
             }
 
-            uint256 total = _launchPad.unlockPercent;
+            uint256 total = _createPool.unlockPercent;
             uint256 curTime = 0;
 
-            for (uint256 i; i < _launchPad.times.length;) {
-                total = total + _launchPad.percents[i];
-                uint256 tmpTime = _launchPad.times[i];
+            for (uint256 i; i < _createPool.times.length;) {
+                total = total + _createPool.percents[i];
+                uint256 tmpTime = _createPool.times[i];
 
-                if (tmpTime < _launchPad.tge + _launchPad.cliffTime || tmpTime <= curTime) {
+                if (tmpTime < _createPool.tge + _createPool.cliff || tmpTime <= curTime) {
                     revert InvalidArgMileStoneCreatePool();
                 }
 
@@ -146,67 +75,323 @@ contract PurrVestingLaunchPool is Ownable, IPurrLaunchPool {
                 revert InvalidArgTotalPercentCreatePool();
             }
         } else {
-            if (_launchPad.times.length != 0 || _launchPad.percents.length != 0 || _launchPad.linearTime <= 0) {
+            if (_createPool.times.length != 0 || _createPool.percents.length != 0 || _createPool.linearVestingDuration <= 0) {
                 revert InvalidArgLinearCreatePool();
             }
         }
+
+        ++poolIndex;
+        poolInfo[poolIndex] = Pool({
+            id: poolIndex,
+            projectId: _createPool.projectId,
+            tokenFund: _createPool.tokenFund,
+            name: _createPool.name,
+            vestingType: _createPool.vestingType,
+            tge: _createPool.tge,
+            cliff: _createPool.cliff,
+            unlockPercent: _createPool.unlockPercent,
+            linearVestingDuration: _createPool.linearVestingDuration,
+            times: _createPool.times,
+            percents: _createPool.percents,
+            fundsTotal: 0,
+            fundsClaimed: 0,
+            state: PoolState.INIT
+        });
+
+        emit CreatePoolEvent(poolInfo[poolIndex]);
     }
 
     /**
-     * @dev Validate {_launchPool} field if exist.
-     *
-     * @param _launchPool The launchpool information.
+     * @inheritdoc IPurrVesting
      */
-    function _validateLaunchPool(LaunchPool memory _launchPool) public pure {
-        if (_launchPool.startTime > 0) {
-            if (uint8(_launchPool.typeVesting) > 3) {
-                revert InvalidVestingType();
+    function addFund(uint256 _poolId, uint256[] calldata _fundAmounts, address[] calldata _users) external onlyOwner {
+        uint256 userLength = _users.length;
+        uint256 fundLength = _fundAmounts.length;
+        address sender = msg.sender;
+
+        if (userLength != fundLength) {
+            revert InvalidArgument();
+        }
+
+        if (_poolId > poolIndex || _poolId <= 0) {
+            revert InvalidPoolIndex(_poolId);
+        }
+
+        uint256 length = _users.length;
+        uint256 totalFundDeposit;
+
+        for (uint256 i; i < length;) {
+            address user = _users[i];
+            uint256 fundAmount = _fundAmounts[i];
+            uint256 oldFund = userPoolInfo[_poolId][user].fund;
+
+            if (oldFund > 0) {
+                userPoolInfo[_poolId][user].fund += fundAmount;
+            } else {
+                userPoolInfo[_poolId][user].fund += fundAmount;
+                userPoolInfo[_poolId][user].released = 0;
             }
 
-            if (
-                _launchPool.tge < _launchPool.vestingTime || _launchPool.unlockPercent < 0
-                    || _launchPool.unlockPercent > ONE_HUNDRED_PERCENT_SCALED || _launchPool.cliffTime < 0
-            ) {
-                revert InvalidArgPercentCreatePool();
+            totalFundDeposit += fundAmount;
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        poolInfo[poolIndex].fundsTotal += totalFundDeposit;
+
+        IERC20(poolInfo[poolIndex].tokenFund).safeTransferFrom(sender, address(this), totalFundDeposit);
+
+        emit AddFundEvent(_poolId, _users, _fundAmounts);
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function removeFund(uint256 _poolId, address[] calldata _users) external onlyOwner {
+        Pool storage pool = poolInfo[_poolId];
+
+        uint256 length = _users.length;
+
+        if (_poolId > poolIndex || _poolId <= 0) {
+            revert InvalidPoolIndex(_poolId);
+        }
+
+        uint256 totalRemove;
+
+        for (uint256 i; i < length;) {
+            uint256 oldFund = userPoolInfo[_poolId][_users[i]].fund;
+
+            if (oldFund > 0) {
+                userPoolInfo[_poolId][_users[i]].fund = 0;
+                userPoolInfo[_poolId][_users[i]].released = 0;
+                pool.fundsTotal -= oldFund;
+                totalRemove += oldFund;
             }
 
-            if (
-                uint8(_launchPool.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)
-                    || uint8(_launchPool.typeVesting) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)
-            ) {
-                if (
-                    _launchPool.times.length != _launchPool.percents.length || _launchPool.times.length < 0
-                        || _launchPool.linearTime != 0
-                ) {
-                    revert InvalidArgCreatePool();
-                }
+            unchecked {
+                ++i;
+            }
+        }
+        IERC20(pool.tokenFund).safeTransfer(msg.sender, totalRemove);
 
-                uint256 total = _launchPool.unlockPercent;
-                uint256 curTime = 0;
+        emit RemoveFundEvent(_poolId, _users);
+    }
 
-                for (uint256 i; i < _launchPool.times.length;) {
-                    total = total + _launchPool.percents[i];
-                    uint256 tmpTime = _launchPool.times[i];
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function claimFund(uint256 _poolId) external whenNotPaused nonReentrant {
+        Pool storage pool = poolInfo[_poolId];
+        address sender = msg.sender;
 
-                    if (tmpTime < _launchPool.tge + _launchPool.cliffTime || tmpTime <= curTime) {
-                        revert InvalidArgMileStoneCreatePool();
+        if (pool.state != PoolState.STARTING) {
+            revert InvalidState(pool.state);
+        }
+
+        if (userPoolInfo[_poolId][sender].fund <= 0) {
+            revert InvalidClaimer(sender);
+        }
+
+        if (userPoolInfo[_poolId][sender].fund <= userPoolInfo[_poolId][sender].released) {
+            revert InvalidFund();
+        }
+
+        if (block.timestamp < pool.tge) {
+            revert InvalidTime(block.timestamp);
+        }
+
+        uint256 claimPercent = _calculateClaimPercent(_poolId, block.timestamp);
+
+        if (claimPercent <= 0) {
+            revert InvalidClaimPercent();
+        }
+
+        uint256 claimTotal =
+            userPoolInfo[_poolId][sender].fund.mulDiv(claimPercent, ONE_HUNDRED_PERCENT_SCALED, Math.Rounding.Floor);
+
+        if (claimTotal < userPoolInfo[_poolId][sender].released) {
+            revert InvalidClaimAmount();
+        }
+
+        uint256 claimAmount = claimTotal - userPoolInfo[_poolId][sender].released;
+
+        userPoolInfo[_poolId][sender].released += claimAmount;
+        pool.fundsClaimed += claimAmount;
+
+        IERC20(pool.tokenFund).safeTransfer(sender, claimAmount);
+
+        emit ClaimFundEvent(_poolId, sender, claimAmount);
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function start(uint256 _poolId) external onlyOwner {
+        Pool storage pool = poolInfo[_poolId];
+
+        if (pool.state != PoolState.INIT && pool.state != PoolState.PAUSE) {
+            revert InvalidState(pool.state);
+        }
+
+        pool.state = PoolState.STARTING;
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function pause(uint256 _poolId) external onlyOwner {
+        poolInfo[_poolId].state = PoolState.PAUSE;
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function end(uint256 _poolId) external nonReentrant onlyOwner {
+        poolInfo[_poolId].state = PoolState.END;
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function pauseSystem() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function unpauseSystem() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function getPendingFund(uint256 _poolId, address _claimer) external view returns (uint256) {
+        Pool memory pool = poolInfo[_poolId];
+
+        if (pool.state != PoolState.STARTING || block.timestamp < pool.tge) {
+            return 0;
+        }
+
+        if (
+            userPoolInfo[_poolId][_claimer].fund <= 0
+                || userPoolInfo[_poolId][_claimer].fund <= userPoolInfo[_poolId][_claimer].released
+        ) {
+            return 0;
+        }
+
+        uint256 claimPercent = _calculateClaimPercent(_poolId, block.timestamp);
+
+        if (claimPercent <= 0) {
+            return 0;
+        }
+
+        uint256 claimTotal =
+            userPoolInfo[_poolId][_claimer].fund.mulDiv(claimPercent, ONE_HUNDRED_PERCENT_SCALED, Math.Rounding.Floor);
+
+        if (claimTotal < userPoolInfo[_poolId][_claimer].released) {
+            return 0;
+        }
+
+        uint256 claimAmount = claimTotal - userPoolInfo[_poolId][_claimer].released;
+
+        return claimAmount;
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function getCurrentClaimPercent(uint256 _poolId) external view returns (uint256) {
+        return _calculateClaimPercent(_poolId, block.timestamp);
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function getPoolInfo(uint256 _poolId) external view returns (Pool memory) {
+        return poolInfo[_poolId];
+    }
+
+    /**
+     * @inheritdoc IPurrVesting
+     */
+    function getUserClaimInfo(uint256 _poolId, address _user) external view returns (UserPool memory) {
+        return userPoolInfo[_poolId][_user];
+    }
+
+    /**
+     * @dev Calculate claim percent base on {_now}.
+     *
+     * @param _poolId The poolId onchain
+     * @param _now The mark to set.
+     *
+     * @return The claim percent base on {_now}.
+     */
+    function _calculateClaimPercent(uint256 _poolId, uint256 _now) internal view returns (uint256) {
+        Pool memory pool = poolInfo[_poolId];
+
+        uint64[] memory times = pool.times;
+        uint16[] memory percents = pool.percents;
+
+        uint256 totalPercent = 0;
+        uint256 tge = pool.tge;
+        uint256 milestonesLength = times.length;
+
+        if (uint8(pool.vestingType) == uint8(VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST)) {
+            if (_now >= tge + pool.cliff) {
+                totalPercent += pool.unlockPercent;
+
+                for (uint256 i; i < milestonesLength;) {
+                    if (_now >= times[i]) {
+                        totalPercent += percents[i];
                     }
-
-                    curTime = tmpTime;
 
                     unchecked {
                         ++i;
                     }
                 }
+            }
+        } else if (uint8(pool.vestingType) == uint8(VestingType.VESTING_TYPE_MILESTONE_UNLOCK_FIRST)) {
+            if (_now >= tge) {
+                totalPercent += pool.unlockPercent;
+                if (_now >= tge + pool.cliff) {
+                    for (uint256 i; i < milestonesLength;) {
+                        if (_now >= times[i]) {
+                            totalPercent += percents[i];
+                        }
 
-                if (total != ONE_HUNDRED_PERCENT_SCALED) {
-                    revert InvalidArgTotalPercentCreatePool();
-                }
-            } else {
-                if (_launchPool.times.length != 0 || _launchPool.percents.length != 0 || _launchPool.linearTime <= 0) {
-                    revert InvalidArgLinearCreatePool();
+                        unchecked {
+                            ++i;
+                        }
+                    }
                 }
             }
+        } else if (uint8(pool.vestingType) == uint8(VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST)) {
+            if (_now >= tge) {
+                totalPercent += pool.unlockPercent;
+                if (_now >= tge + pool.cliff) {
+                    uint256 delta = _now - tge - pool.cliff;
+
+                    totalPercent += (
+                        delta.mulDiv(
+                            ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration, Math.Rounding.Floor
+                        )
+                    );
+                }
+            }
+        } else if (uint8(pool.vestingType) == uint8(VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST)) {
+            if (_now >= tge + pool.cliff) {
+                totalPercent += pool.unlockPercent;
+                uint256 delta = _now - tge - pool.cliff;
+                totalPercent += (
+                    delta.mulDiv(ONE_HUNDRED_PERCENT_SCALED - pool.unlockPercent, pool.linearVestingDuration, Math.Rounding.Floor)
+                );
+            }
         }
+
+        return (totalPercent < ONE_HUNDRED_PERCENT_SCALED) ? totalPercent : ONE_HUNDRED_PERCENT_SCALED;
     }
 }

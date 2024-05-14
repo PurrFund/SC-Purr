@@ -1,73 +1,47 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import { BaseScript } from "./Base.s.sol";
 import { PurrVestingLaunchPool } from "../src/PurrVestingLaunchPool.sol";
-import { LaunchPool, LaunchPad, PreProject, VestingType } from "../src/types/PurrLaunchPoolType.sol";
-import { ERC20Mock } from "../test/mocks/ERC20Mock.sol";
+import { CreatePool, VestingType } from "../src/types/PurrVestingType.sol";
 
-contract PurrVestingLaunchPoolScript is BaseScript {
-    PreProject project;
-    LaunchPool launchPool;
-    LaunchPad launchPad;
-    address usd = 0xcB269E7e42D8728C91CCF840c27A25f11285548f;
-    uint64[] time;
-    uint16[] percent;
+contract PurrVestingLaunchPadScript is BaseScript {
+    PurrVestingLaunchPool purrVesting;
+    address idoMock = 0x9ab93Fe22e82dC098dA674818a74901EB7a9D7A6;
+    uint64[] times;
+    uint16[] percents;
+    uint256[] fundAmountList;
+    address[] userList;
 
     function run() public broadcast {
-        // time.push(uint64(block.timestamp + 45 days));
-        // time.push(uint64(block.timestamp + 90 days));
-        // time.push(uint64(block.timestamp + 120 days));
-        // percent.push(1000);
-        // percent.push(5000);
-        // percent.push(10_000);
-        PurrVestingLaunchPool launchpool = new PurrVestingLaunchPool(msg.sender);
-        ERC20Mock tokenIDO = new ERC20Mock("FANX", "FXK");
-
-        project = PreProject({
-            owner: msg.sender,
-            tokenIDO: address(tokenIDO),
+        purrVesting = new PurrVestingLaunchPool(msg.sender);
+        CreatePool memory createPool1 = CreatePool({
+            projectId: "17aa0f02-6ce1-4352-84ab-42bc0fa66d15",
+            tokenFund: idoMock,
             name: "FANX",
-            twitter: "twitter.com",
-            discord: "discord.com",
-            telegram: "telegram.com",
-            website: "website.com"
-        });
-
-        launchPad = LaunchPad({
+            vestingType: VestingType.VESTING_TYPE_LINEAR_CLIFF_FIRST,
+            tge: block.timestamp + 10 seconds,
+            cliff: 10 seconds,
             unlockPercent: 1000,
-            startTime: uint64(2 days),
-            snapshotTime: uint64(3 days),
-            autoVestingTime: uint64(4 days),
-            vestingTime: uint64(7 days),
-            percents: percent,
-            times: time,
-            tge: 10 days,
-            cliffTime: 0,
-            linearTime: 50 days,
-            tokenOffer: 100_000_000,
-            tokenPrice: 100_000,
-            totalRaise: 200_000,
-            ticketSize: 300,
-            typeVesting: VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
+            linearVestingDuration: 365 days,
+            times: times,
+            percents: percents
         });
 
-        launchPool = LaunchPool({
-            unlockPercent: 1000,
-            startTime: uint64(2 days),
-            snapshotTime: uint64(3 days),
-            autoVestingTime: uint64(4 days),
-            vestingTime: uint64(7 days),
-            percents: percent,
-            times: time,
-            tge: 10 days,
-            cliffTime: 0,
-            linearTime: 50 days,
-            tokenReward: 100_000_000,
-            totalAirdrop: 20_000,
-            typeVesting: VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
-        });
+        purrVesting.createPool(createPool1);
 
-        launchpool.createProject(project, launchPool, launchPad);
+        ERC20(idoMock).approve(address(purrVesting), ERC20(idoMock).balanceOf(msg.sender));
+
+        userList.push(0x9C623EfF30c8BCba288fc0346C44576d3c7FF52C);
+        userList.push(0x1405dC6c6cB6Cb9480F01E3E43a5ec89f680Cb8D);
+        userList.push(0xA9c80A4ece07EAcA61E20c79c7D4DE343A6A3d27);
+        fundAmountList.push(100e18);
+        fundAmountList.push(150e18);
+        fundAmountList.push(120e18);
+
+        purrVesting.addFund(1, fundAmountList, userList);
+        purrVesting.start(1);
     }
 }

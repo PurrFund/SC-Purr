@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 struct UserPoolInfo {
+    uint64 startAt;
     uint64 updateAt;
     uint64 end;
     // for poolType is ONE

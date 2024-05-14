@@ -81,6 +81,7 @@ contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
 
         // create new item
         userPoolInfo[itemId] = UserPoolInfo({
+            startAt: uint64(block.timestamp),
             updateAt: uint64(block.timestamp),
             end: uint64(block.timestamp + pool.lockDay),
             timeUnstaked: 0,
@@ -216,6 +217,16 @@ contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
     function getPendingReward(uint256 _itemId) external view returns (uint256) {
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
         return _calculatePendingReward(userPool);
+    }
+
+    function getTotalReward(uint256 _itemId) external view returns(uint256){
+        UserPoolInfo memory userPool = userPoolInfo[_itemId];
+        PoolInfo memory pool = poolInfo[userPool.poolType];
+        uint256 timeStaked = userPool.end - userPool.startAt;
+        uint256 timeStakedMulApy = timeStaked * pool.apy;
+        uint256 div = 10_000 * SECOND_YEAR;
+
+        return userPool.stakedAmount.mulDiv(timeStakedMulApy, div, Math.Rounding.Floor);
     }
 
     /**

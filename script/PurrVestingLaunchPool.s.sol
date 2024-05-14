@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import { BaseScript } from "./Base.s.sol";
-import { PurrLaunchPool } from "../src/PurrLaunchPool.sol";
+import { PurrVestingLaunchPool } from "../src/PurrVestingLaunchPool.sol";
 import { LaunchPool, LaunchPad, PreProject, VestingType } from "../src/types/PurrLaunchPoolType.sol";
 import { ERC20Mock } from "../test/mocks/ERC20Mock.sol";
 
-contract DeployPurrLaunchPoolcript is BaseScript {
+contract PurrVestingLaunchPoolScript is BaseScript {
     PreProject project;
     LaunchPool launchPool;
     LaunchPad launchPad;
@@ -21,7 +21,7 @@ contract DeployPurrLaunchPoolcript is BaseScript {
         // percent.push(1000);
         // percent.push(5000);
         // percent.push(10_000);
-        PurrLaunchPool launchpool = new PurrLaunchPool(msg.sender);
+        PurrVestingLaunchPool launchpool = new PurrVestingLaunchPool(msg.sender);
         ERC20Mock tokenIDO = new ERC20Mock("FANX", "FXK");
 
         project = PreProject({

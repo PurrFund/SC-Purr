@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import { BaseTest } from "../Base.t.sol";
-import { PurrLaunchPool } from "../../src/PurrLaunchPool.sol";
+import { PurrVestingLaunchPool } from "../../src/PurrVestingLaunchPool.sol";
 import { LaunchPool, LaunchPad, PreProject, Project, VestingType } from "../../src/types/PurrLaunchPoolType.sol";
 import { ERC20Mock } from "../mocks/ERC20Mock.sol";
 
@@ -10,7 +10,7 @@ contract PurrLaunchPoolTest is BaseTest {
     event CreateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
     event UpdateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);
 
-    PurrLaunchPool public purrLaunchPool;
+    PurrVestingLaunchPool public purrLaunchPool;
 
     ERC20Mock tokenIDO = new ERC20Mock("tokenIDO", "IDO");
     ERC20Mock tokenUseToBuy = new ERC20Mock("tokenUseToBuy", "TBuy");
@@ -124,7 +124,7 @@ contract PurrLaunchPoolTest is BaseTest {
     }
 
     function setUp() public {
-        purrLaunchPool = new PurrLaunchPool(users.admin);
+        purrLaunchPool = new PurrVestingLaunchPool(users.admin);
     }
 
     function test_CreateProject_ShouldRevert_WhenNotAuthorized() public {

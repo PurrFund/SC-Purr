@@ -7,7 +7,7 @@ import { BaseScript } from "./Base.s.sol";
 import { PurrStaking } from "../src/PurrStaking.sol";
 import { PoolInfo, PoolType, TierType, TierInfo } from "../src/types/PurrStaingType.sol";
 
-contract DeployPurrStakingScript is BaseScript {
+contract PurrStakingScript is BaseScript {
     address purrToken = 0x2C7468DF2836cE821C48867961556E62D76CA920;
     PurrStaking purrStaking;
 

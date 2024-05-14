@@ -69,7 +69,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
         (,, uint16 multiplier, uint32 lockDay,, uint256 totalStaked, uint256 numberStaker,) = purrStaking.poolInfo(PoolType.THREE);
-        (   
+        (
             uint64 startAt,
             uint64 updateAt,
             uint64 end,
@@ -181,7 +181,7 @@ contract PurrStakingTest is BaseTest {
 
         uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
-        (   
+        (
             uint64 preStartAt,
             ,
             uint64 preEnd,
@@ -256,7 +256,15 @@ contract PurrStakingTest is BaseTest {
         });
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.TWO
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.TWO
         );
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.TWO);
@@ -347,7 +355,7 @@ contract PurrStakingTest is BaseTest {
 
         uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
-        (   
+        (
             uint64 preStartAt,
             ,
             uint64 preEnd,
@@ -425,7 +433,15 @@ contract PurrStakingTest is BaseTest {
         });
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.TWO
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.TWO
         );
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.TWO);
@@ -616,7 +632,15 @@ contract PurrStakingTest is BaseTest {
         });
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.ONE
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.ONE
         );
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.ONE);
@@ -707,8 +731,16 @@ contract PurrStakingTest is BaseTest {
 
         uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
-        (uint64 preStartAt, , uint64 preEnd,, uint256 preAmountAvailable, address preStaker, uint256 prePPoint, uint256 preStakedAmount,) =
-            purrStaking.userPoolInfo(itemId);
+        (
+            uint64 preStartAt,
+            ,
+            uint64 preEnd,
+            ,
+            uint256 preAmountAvailable,
+            address preStaker,
+            uint256 prePPoint,
+            uint256 preStakedAmount,
+        ) = purrStaking.userPoolInfo(itemId);
 
         (
             uint16 preUnstakeFee,
@@ -775,7 +807,15 @@ contract PurrStakingTest is BaseTest {
         });
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.ONE
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.ONE
         );
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.ONE);
@@ -799,8 +839,16 @@ contract PurrStakingTest is BaseTest {
         uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
 
-        (uint64 preStartAt, , uint64 preEnd,, uint256 preAmountAvailable, address preStaker, uint256 prePPoint, uint256 preStakedAmount,) =
-            purrStaking.userPoolInfo(itemId);
+        (
+            uint64 preStartAt,
+            ,
+            uint64 preEnd,
+            ,
+            uint256 preAmountAvailable,
+            address preStaker,
+            uint256 prePPoint,
+            uint256 preStakedAmount,
+        ) = purrStaking.userPoolInfo(itemId);
 
         (
             uint16 preUnstakeFee,
@@ -872,7 +920,15 @@ contract PurrStakingTest is BaseTest {
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.ONE);
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.ONE
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.ONE
         );
 
         assertEq(abi.encode(expectPoolInfo), abi.encode(actualPoolInfo));
@@ -1044,8 +1100,16 @@ contract PurrStakingTest is BaseTest {
             uint256 preNumberStaker,
         ) = purrStaking.poolInfo(PoolType.ONE);
 
-        (uint64 preStartAt,, uint64 preEnd,, uint256 preAmountAvailable, address preStaker, uint256 prePPoint, uint256 preStakedAmount,) =
-            purrStaking.userPoolInfo(itemId);
+        (
+            uint64 preStartAt,
+            ,
+            uint64 preEnd,
+            ,
+            uint256 preAmountAvailable,
+            address preStaker,
+            uint256 prePPoint,
+            uint256 preStakedAmount,
+        ) = purrStaking.userPoolInfo(itemId);
 
         uint256 preAliceBL = launchPadToken.balanceOf(users.alice);
         uint256 prePurrBL = launchPadToken.balanceOf(address(purrStaking));
@@ -1104,7 +1168,15 @@ contract PurrStakingTest is BaseTest {
         });
 
         UserPoolInfo memory actualUserPool = UserPoolInfo(
-            posStartAt, posUpdateAt, posEnd, posTimeUnstaked, posAmountAvailable, posStaker, posPPoint, posStakedAmount, PoolType.ONE
+            posStartAt,
+            posUpdateAt,
+            posEnd,
+            posTimeUnstaked,
+            posAmountAvailable,
+            posStaker,
+            posPPoint,
+            posStakedAmount,
+            PoolType.ONE
         );
         PoolInfo memory actualPoolInfo =
             PoolInfo(posUnstakeFee, posApy, multiplier, posLockDay, posUnstakeTime, posTotalStaked, posNumberStaker, PoolType.ONE);
@@ -1155,7 +1227,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.ONE);
         vm.stopPrank();
 
-        (,uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (, uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1182,7 +1254,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.TWO);
         vm.stopPrank();
 
-        (,uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (, uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1209,7 +1281,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
 
-        (,uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (, uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1236,7 +1308,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.FOUR);
         vm.stopPrank();
 
-        (,uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (, uint64 updateAt,,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1263,7 +1335,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.ONE);
         vm.stopPrank();
 
-        (uint64 startAt,,uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (uint64 startAt,, uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1289,7 +1361,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.TWO);
         vm.stopPrank();
 
-        (uint64 startAt,,uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (uint64 startAt,, uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1315,7 +1387,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
 
-        (uint64 startAt,,uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (uint64 startAt,, uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1341,7 +1413,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.FOUR);
         vm.stopPrank();
 
-        (uint64 startAt,,uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
+        (uint64 startAt,, uint64 end,,,,,, PoolType poolType) = purrStaking.userPoolInfo(itemId);
 
         (, uint16 apy,,,,,,) = purrStaking.poolInfo(poolType);
 
@@ -1410,7 +1482,7 @@ contract PurrStakingTest is BaseTest {
         vm.prank(users.alice);
         purrStaking.claimReward(itemId);
 
-        (,uint64 updateAt,,,,,,,) = purrStaking.userPoolInfo(itemId);
+        (, uint64 updateAt,,,,,,,) = purrStaking.userPoolInfo(itemId);
 
         uint256 posPurrBL = launchPadToken.balanceOf(address(purrStaking));
         uint256 posAliceBL = launchPadToken.balanceOf(users.alice);
@@ -1583,7 +1655,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.ONE);
         vm.stopPrank();
 
-        (,uint64 updateAt1,,,,,,, PoolType poolType1) = purrStaking.userPoolInfo(1);
+        (, uint64 updateAt1,,,,,,, PoolType poolType1) = purrStaking.userPoolInfo(1);
 
         (, uint16 _apy1,,,,,,) = purrStaking.poolInfo(poolType1);
 
@@ -1607,7 +1679,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.TWO);
         vm.stopPrank();
 
-        (,uint64 _updateAt2,,,,,,, PoolType _poolType2) = purrStaking.userPoolInfo(2);
+        (, uint64 _updateAt2,,,,,,, PoolType _poolType2) = purrStaking.userPoolInfo(2);
 
         (, uint16 _apy2,,,,,,) = purrStaking.poolInfo(_poolType2);
 
@@ -1631,7 +1703,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
 
-        (,uint64 _updateAt3,,,,,,, PoolType _poolType3) = purrStaking.userPoolInfo(3);
+        (, uint64 _updateAt3,,,,,,, PoolType _poolType3) = purrStaking.userPoolInfo(3);
 
         (, uint16 _apy3,,,,,,) = purrStaking.poolInfo(_poolType3);
 
@@ -1655,7 +1727,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.FOUR);
         vm.stopPrank();
 
-        (,uint64 _updateAt4,,,,,,, PoolType _poolType4) = purrStaking.userPoolInfo(4);
+        (, uint64 _updateAt4,,,,,,, PoolType _poolType4) = purrStaking.userPoolInfo(4);
 
         (, uint16 _apy4,,,,,,) = purrStaking.poolInfo(_poolType4);
 
@@ -1679,7 +1751,7 @@ contract PurrStakingTest is BaseTest {
         purrStaking.stake(amount, PoolType.THREE);
         vm.stopPrank();
 
-        (,uint64 _updateAt5,,,,,,, PoolType _poolType5) = purrStaking.userPoolInfo(5);
+        (, uint64 _updateAt5,,,,,,, PoolType _poolType5) = purrStaking.userPoolInfo(5);
 
         (, uint16 _apy5,,,,,,) = purrStaking.poolInfo(_poolType5);
 

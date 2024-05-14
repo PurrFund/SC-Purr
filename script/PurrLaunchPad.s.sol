@@ -6,7 +6,7 @@ import { PurrLaunchPad } from "../src/PurrLaunchPad.sol";
 import { LaunchPool, LaunchPad, PreProject, VestingType } from "../src/types/PurrLaunchPadType.sol";
 import { ERC20Mock } from "../test/mocks/ERC20Mock.sol";
 
-contract DeployPurrLaunchPadScript is BaseScript {
+contract PurrLaunchPadScript is BaseScript {
     PreProject project;
     LaunchPool launchPool;
     LaunchPad launchPad;
@@ -19,8 +19,8 @@ contract DeployPurrLaunchPadScript is BaseScript {
         time.push(uint64(block.timestamp + 90 days));
         time.push(uint64(block.timestamp + 120 days));
         percent.push(1000);
+        percent.push(3000);
         percent.push(5000);
-        percent.push(10_000);
         PurrLaunchPad launchpad = new PurrLaunchPad(msg.sender);
         ERC20Mock tokenIDO = new ERC20Mock("FANX", "FXK");
 
@@ -36,36 +36,36 @@ contract DeployPurrLaunchPadScript is BaseScript {
 
         launchPad = LaunchPad({
             unlockPercent: 1000,
-            startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days),
-            autoVestingTime: uint64(block.timestamp + 3 days),
+            startTime: uint64(block.timestamp + 2 days),
+            snapshotTime: uint64(block.timestamp + 4 days),
+            autoVestingTime: uint64(block.timestamp + 5 days),
             vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,
             times: time,
             tge: block.timestamp + 10 days,
             cliffTime: 30 days,
-            linearTime: 50 days,
-            tokenOffer: 100_000_000,
-            tokenPrice: 100_000,
-            totalRaise: 200_000,
-            ticketSize: 300,
-            typeVesting: VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
+            linearTime: 0,
+            tokenOffer: 100_000_000e18,
+            tokenPrice: 100_000e18,
+            totalRaise: 200_000e18,
+            ticketSize: 300e18,
+            typeVesting: VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
         });
 
         launchPool = LaunchPool({
             unlockPercent: 1000,
-            startTime: uint64(block.timestamp - 2 days),
-            snapshotTime: uint64(block.timestamp + 2 days),
-            autoVestingTime: uint64(block.timestamp + 3 days),
+            startTime: uint64(block.timestamp + 2 days),
+            snapshotTime: uint64(block.timestamp + 4 days),
+            autoVestingTime: uint64(block.timestamp + 5 days),
             vestingTime: uint64(block.timestamp + 7 days),
             percents: percent,
             times: time,
             tge: block.timestamp + 10 days,
             cliffTime: 30 days,
-            linearTime: 50 days,
-            tokenReward: 100_000_000,
-            totalAirdrop: 20_000,
-            typeVesting: VestingType.VESTING_TYPE_LINEAR_UNLOCK_FIRST
+            linearTime: 0,
+            tokenReward: 100_000_000e18,
+            totalAirdrop: 20_000e18,
+            typeVesting: VestingType.VESTING_TYPE_MILESTONE_CLIFF_FIRST
         });
 
         launchpad.createProject(project, launchPool, launchPad);

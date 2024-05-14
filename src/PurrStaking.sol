@@ -219,7 +219,7 @@ contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
         return _calculatePendingReward(userPool);
     }
 
-    function getTotalReward(uint256 _itemId) external view returns(uint256){
+    function getTotalReward(uint256 _itemId) external view returns (uint256) {
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
         PoolInfo memory pool = poolInfo[userPool.poolType];
         uint256 timeStaked = userPool.end - userPool.startAt;

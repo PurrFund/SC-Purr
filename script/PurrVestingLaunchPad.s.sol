@@ -7,7 +7,7 @@ import { BaseScript } from "./Base.s.sol";
 import { PurrVestingLaunchPad } from "../src/PurrVestingLaunchPad.sol";
 import { CreatePool, VestingType } from "../src/types/PurrVestingType.sol";
 
-contract PurrVestingScript is BaseScript {
+contract PurrVestingLaunchPadScript is BaseScript {
     PurrVestingLaunchPad purrVesting;
     address idoMock = 0x9ab93Fe22e82dC098dA674818a74901EB7a9D7A6;
     uint64[] times;
@@ -44,9 +44,4 @@ contract PurrVestingScript is BaseScript {
         purrVesting.addFund(1, fundAmountList, userList);
         purrVesting.start(1);
     }
-
-    // function claim(address _purrVesting, address _user) public broadcastCustom(_user){
-    //     uint256 poolId = 1;
-    //     PurrVesting(_purrVesting).claimFund(_poolId);
-    // }
 }

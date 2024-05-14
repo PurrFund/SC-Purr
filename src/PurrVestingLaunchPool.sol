@@ -11,7 +11,7 @@ import { IPurrLaunchPool } from "./interfaces/IPurrLaunchPool.sol";
 /**
  * @notice PurrLaunchPad contract.
  */
-contract PurrLaunchPool is Ownable, IPurrLaunchPool {
+contract PurrVestingLaunchPool is Ownable, IPurrLaunchPool {
     using SafeERC20 for IERC20;
 
     uint256 public constant ONE_HUNDRED_PERCENT_SCALED = 10_000;

@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import { BaseScript } from "./Base.s.sol";
 import { PurrToken } from "../src/token/PurrToken.sol";
 
-contract DeployPurrTokenScript is BaseScript {
+contract PurrTokenScript is BaseScript {
     PurrToken purr;
 
     function run() public broadcast {

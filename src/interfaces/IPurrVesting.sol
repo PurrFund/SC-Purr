@@ -3,6 +3,9 @@ pragma solidity ^0.8.20;
 
 import { PoolState, Pool, CreatePool, UserPool } from "../types/PurrVestingType.sol";
 
+/**
+ * @title IPurrVesting interface.
+ */
 interface IPurrVesting {
     // event list
     event CreatePoolEvent(Pool pool);

@@ -6,7 +6,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { BaseScript } from "./Base.s.sol";
 import { PurrDeposit } from "../src/PurrDeposit.sol";
 
-contract DeployPurrDepositScript is BaseScript {
+contract PurrDepositScript is BaseScript {
     address rootAdmin = vm.envAddress("ROOT_ADMIN");
     address subAdmin = vm.envAddress("SUB_ADMIN");
     PurrDeposit purr;

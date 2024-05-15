@@ -11,6 +11,8 @@ import { IPurrDeposit } from "./interfaces/IPurrDeposit.sol";
 
 /**
  * @title PurrDeposit contract.
+ *
+ * @notice See document in an {IPurrDeposit} interface.
  */
 contract PurrDeposit is Ownable, ReentrancyGuard, Pausable, IPurrDeposit {
     using SafeERC20 for IERC20;

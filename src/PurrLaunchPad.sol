@@ -9,7 +9,9 @@ import { LaunchPool, LaunchPad, PreProject, Project, VestingType } from "./types
 import { IPurrLaunchPad } from "./interfaces/IPurrLaunchPad.sol";
 
 /**
- * @notice PurrLaunchPad contract.
+ * @title PurrLaunchPad contract.
+ *
+ * @notice See document in an {IPurrLaunchPad} interface.
  */
 contract PurrLaunchPad is Ownable, IPurrLaunchPad {
     using SafeERC20 for IERC20;

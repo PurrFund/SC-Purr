@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
+/**
+ * @title IPurrDeposit interface.
+ */
 interface IPurrDeposit {
     // event list
     event Deposit(address indexed depositor, uint256 amount, uint256 timeDeposit);

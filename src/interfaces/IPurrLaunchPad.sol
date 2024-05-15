@@ -3,6 +3,9 @@ pragma solidity ^0.8.20;
 
 import { LaunchPool, LaunchPad, PreProject, Project } from "../types/PurrLaunchPadType.sol";
 
+/**
+ * @title IPurrLaunchPad interface.
+ */
 interface IPurrLaunchPad {
     // event list
     event CreateProject(Project project, LaunchPad launchPad, LaunchPool launchPool);

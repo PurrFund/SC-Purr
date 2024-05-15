@@ -3,6 +3,9 @@ pragma solidity ^0.8.20;
 
 import { PoolType, PoolInfo, TierInfo } from "../types/PurrStaingType.sol";
 
+/**
+ * @title IPurrStaking interface.
+ */
 interface IPurrStaking {
     // event list
     event Stake(
@@ -89,6 +92,15 @@ interface IPurrStaking {
      * @return The pending reward.
      */
     function getPendingReward(uint256 _itemId) external view returns (uint256);
+
+    /**
+     * @notice Get total reward in the past.
+     *
+     * @param _itemId The item id.
+     *
+     * @return The pending reward.
+     */
+    function getTotalReward(uint256 _itemId) external view returns (uint256);
 
     /**
      * @notice Claim token pending reward.

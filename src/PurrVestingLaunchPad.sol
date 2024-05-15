@@ -13,7 +13,9 @@ import { PoolState, Pool, UserPool, CreatePool } from "./types/PurrVestingType.s
 import { VestingType } from "./types/PurrLaunchPadType.sol";
 
 /**
- * @title PurrVestingLaunchPad contract
+ * @title PurrVestingLaunchPad contract.
+ *
+ * @notice See document in an {IPurrVesting} interface.
  */
 contract PurrVestingLaunchPad is Ownable, ReentrancyGuard, Pausable, IPurrVesting {
     using Math for uint256;
@@ -25,7 +27,10 @@ contract PurrVestingLaunchPad is Ownable, ReentrancyGuard, Pausable, IPurrVestin
     uint256 public poolIndex;
     uint256 public constant ONE_HUNDRED_PERCENT_SCALED = 10_000;
 
-    constructor(address initialOwner) Ownable(initialOwner) { }
+    /**
+     * @param _initialOwner The inital onwer.
+     */
+    constructor(address _initialOwner) Ownable(_initialOwner) { }
 
     /**
      * @inheritdoc IPurrVesting

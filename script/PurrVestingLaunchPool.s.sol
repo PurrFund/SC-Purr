@@ -7,7 +7,7 @@ import { BaseScript } from "./Base.s.sol";
 import { PurrVestingLaunchPool } from "../src/PurrVestingLaunchPool.sol";
 import { CreatePool, VestingType } from "../src/types/PurrVestingType.sol";
 
-contract PurrVestingLaunchPadScript is BaseScript {
+contract PurrVestingLaunchPoolScript is BaseScript {
     PurrVestingLaunchPool purrVesting;
     address idoMock = 0x9ab93Fe22e82dC098dA674818a74901EB7a9D7A6;
     uint64[] times;

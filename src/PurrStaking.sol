@@ -12,7 +12,9 @@ import { IPurrStaking } from "./interfaces/IPurrStaking.sol";
 import { PurrToken } from "./token/PurrToken.sol";
 
 /**
- * @notice PurrStaking contract.
+ * @title PurrStaking contract.
+ *
+ * @notice See document in an {IPurrStaking} interface.
  */
 contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
     using SafeERC20 for PurrToken;
@@ -31,6 +33,12 @@ contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
     mapping(TierType tierType => TierInfo tier) public tierInfo;
     mapping(PoolType poolType => PoolInfo pool) public poolInfo;
 
+    /**
+     * @param _launchPadToken The launchpad token.
+     * @param _initialOnwer The inital owner.
+     * @param _pools The pool list information.
+     * @param _tiers The tier list information.
+     */
     constructor(
         address _launchPadToken,
         address _initialOnwer,
@@ -219,6 +227,9 @@ contract PurrStaking is Ownable, ReentrancyGuard, Pausable, IPurrStaking {
         return _calculatePendingReward(userPool);
     }
 
+    /**
+     * @inheritdoc IPurrStaking
+     */
     function getTotalReward(uint256 _itemId) external view returns (uint256) {
         UserPoolInfo memory userPool = userPoolInfo[_itemId];
         PoolInfo memory pool = poolInfo[userPool.poolType];
